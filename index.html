@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人基金管理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#333;min-height:100vh}
+.app-container{max-width:600px;margin:0 auto;background:#fff;min-height:100vh;display:flex;flex-direction:column}
+.app-header{background:#4a90d9;color:#fff;padding:16px;text-align:center;font-size:18px;font-weight:600;position:sticky;top:0;z-index:100;position:relative}
+.app-header .back-btn{position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px}
+.app-main{flex:1;padding:16px;padding-bottom:70px;overflow-y:auto}
+.tab-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;display:flex;background:#fff;border-top:1px solid #e0e0e0;z-index:100}
+.tab-item{flex:1;padding:10px 0;text-align:center;font-size:12px;color:#999;cursor:pointer;border:none;background:none}
+.tab-item.active{color:#4a90d9;font-weight:600}
+.tab-icon{font-size:20px;display:block;margin-bottom:2px}
+.card{background:#fff;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:1px solid #eee}
+.text-profit{color:#e74c3c}
+.text-loss{color:#27ae60}
+.text-warning{color:#f39c12}
+.text-muted{color:#999;font-size:12px}
+.category-section{margin-bottom:20px}
+.category-header{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:2px solid #4a90d9;margin-bottom:8px}
+.category-header h3{font-size:15px;color:#333}
+.cat-info{font-size:12px;color:#888}
+.fund-item{padding:12px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background 0.15s}
+.fund-item:hover{background:#f8f9fa}
+.fund-item:active{background:#f0f0f0}
+.fund-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.fund-name{font-size:15px;font-weight:500}
+.fund-code{font-size:12px;color:#888;margin-left:6px}
+.fund-amount{font-size:15px;font-weight:600}
+.fund-bottom{display:flex;justify-content:space-between;font-size:12px;color:#888}
+.fund-note{font-size:12px;color:#aaa;margin-top:4px;font-style:italic}
+.btn{display:inline-block;padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer;text-align:center;transition:opacity 0.2s}
+.btn:active{opacity:0.7}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn-primary{background:#4a90d9;color:#fff}
+.btn-danger{background:#e74c3c;color:#fff}
+.btn-secondary{background:#e9ecef;color:#333}
+.btn-warning{background:#f39c12;color:#fff}
+.btn-block{display:block;width:100%}
+.btn-sm{padding:6px 12px;font-size:12px}
+.fab{position:fixed;bottom:70px;right:calc(50% - 280px);width:50px;height:50px;border-radius:50%;background:#4a90d9;color:#fff;font-size:24px;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(74,144,217,0.4);z-index:50}
+@media(max-width:600px){.fab{right:16px}}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:24px}
+.modal h2{font-size:18px;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;color:#555;margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;transition:border-color 0.2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#4a90d9}
+.error-text{color:#e74c3c;font-size:12px;margin-top:4px}
+.hint-text{color:#888;font-size:12px;margin-top:4px}
+.form-actions{display:flex;gap:12px;margin-top:20px}
+.form-actions .btn{flex:1}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:14px}
+.detail-row .label{color:#888}
+.detail-row .value{font-weight:500}
+.record-item{padding:10px 0;border-bottom:1px solid #f5f5f5;font-size:13px}
+.record-top{display:flex;justify-content:space-between;margin-bottom:2px}
+.record-date{color:#888;font-size:12px}
+.section-tabs{display:flex;border-bottom:1px solid #e0e0e0;margin-bottom:12px}
+.section-tab{flex:1;padding:10px;text-align:center;font-size:14px;color:#888;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent}
+.section-tab.active{color:#4a90d9;border-bottom-color:#4a90d9;font-weight:500}
+.setting-section{margin-bottom:24px}
+.setting-section h3{font-size:15px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #eee}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:6px;font-size:14px;z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast.show{opacity:1}
+.refresh-result{padding:12px;border-radius:8px;margin-top:12px;font-size:13px}
+.refresh-result.success{background:#d4edda;color:#155724}
+.refresh-result.partial{background:#fff3cd;color:#856404}
+.empty-state{text-align:center;padding:40px 20px;color:#999}
+.empty-state .empty-icon{font-size:48px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+</style>
+</head>
+<body>
+<div class="app-container" id="app">
+<header class="app-header" id="appHeader"><span id="headerTitle">个人基金管理</span></header>
+<main class="app-main" id="appMain"></main>
+<nav class="tab-bar" id="tabBar"></nav>
+</div>
+<div id="toastEl" class="toast"></div>
+<script>
+// ============================================================
+// 个人基金管理 - 单文件应用
+// ============================================================
+
+// ============================================================
+// Section A: Models / Constants / Factory Functions
+// ============================================================
+
+var FUND_CATEGORIES = {
+  BOND: 'bond',
+  A_STOCK: 'a_stock',
+  GLOBAL_STOCK: 'global_stock'
+};
+
+var FUND_CATEGORY_LABELS = {
+  'bond': '债基',
+  'a_stock': 'A股',
+  'global_stock': '全球股'
+};
+
+var POSITION_TYPES = {
+  BUY: 'buy',
+  SELL: 'sell'
+};
+
+var STORAGE_KEYS = {
+  FUNDS: 'fund_manager_funds',
+  PRICE_RECORDS: 'fund_manager_price_records',
+  POSITION_RECORDS: 'fund_manager_position_records',
+  TARGET_RATIOS: 'fund_manager_target_ratios'
+};
+
+var DEFAULT_TARGET_RATIOS = {
+  bond: 34,
+  a_stock: 33,
+  global_stock: 33
+};
+
+function createFund(input) {
+  var now = new Date().toISOString();
+  return {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    code: input.code,
+    name: input.name,
+    category: input.category,
+    buyPrice: input.buyPrice,
+    currentPrice: input.currentPrice,
+    shares: input.shares,
+    note: input.note || '',
+    lastUpdated: now,
+    createdAt: now
+  };
+}
+
+function createPriceChangeRecord(input) {
+  var changeRate = ((input.newPrice - input.oldPrice) / input.oldPrice) * 100;
+  return {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    fundId: input.fundId,
+    date: new Date().toISOString(),
+    oldPrice: input.oldPrice,
+    newPrice: input.newPrice,
+    changeRate: changeRate
+  };
+}
+
+function createPositionRecord(input) {
+  return {
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    fundId: input.fundId,
+    date: new Date().toISOString(),
+    type: input.type,
+    price: input.price,
+    shares: input.shares,
+    amount: input.price * input.shares
+  };
+}
+
+// ============================================================
+// Section B: StorageService
+// ============================================================
+
+var StorageService = (function() {
+  function save(key, data) {
+    try {
+      var json = JSON.stringify(data);
+      localStorage.setItem(key, json);
+    } catch (error) {
+      console.error('[StorageService] 保存数据失败 (key: ' + key + '):', error);
+    }
+  }
+
+  function load(key) {
+    try {
+      var json = localStorage.getItem(key);
+      if (json === null) return null;
+      return JSON.parse(json);
+    } catch (error) {
+      console.error('[StorageService] 加载数据失败 (key: ' + key + '):', error);
+      return null;
+    }
+  }
+
+  function reset() {
+    Object.values(STORAGE_KEYS).forEach(function(key) {
+      localStorage.removeItem(key);
+    });
+  }
+
+  function exportAll() {
+    var data = {
+      funds: load(STORAGE_KEYS.FUNDS) || [],
+      priceRecords: load(STORAGE_KEYS.PRICE_RECORDS) || [],
+      positionRecords: load(STORAGE_KEYS.POSITION_RECORDS) || [],
+      targetRatios: load(STORAGE_KEYS.TARGET_RATIOS) || {},
+      exportedAt: new Date().toISOString()
+    };
+    return JSON.stringify(data);
+  }
+
+  function validateImportData(data) {
+    var errors = [];
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      errors.push('导入数据必须是一个对象');
+      return { valid: false, errors: errors };
+    }
+    if (!Array.isArray(data.funds)) {
+      errors.push('缺少必要字段: funds（必须为数组）');
+    }
+    if (!Array.isArray(data.priceRecords)) {
+      errors.push('缺少必要字段: priceRecords（必须为数组）');
+    }
+    if (!Array.isArray(data.positionRecords)) {
+      errors.push('缺少必要字段: positionRecords（必须为数组）');
+    }
+    if (data.targetRatios === null || typeof data.targetRatios !== 'object' || Array.isArray(data.targetRatios)) {
+      errors.push('缺少必要字段: targetRatios（必须为对象）');
+    }
+    return { valid: errors.length === 0, errors: errors };
+  }
+
+  function importAll(json, mode) {
+    var data;
+    try {
+      data = JSON.parse(json);
+    } catch (error) {
+      return { success: false, error: '文件格式不正确，无法解析 JSON' };
+    }
+
+    var validation = validateImportData(data);
+    if (!validation.valid) {
+      return { success: false, error: validation.errors.join('; ') };
+    }
+
+    if (mode === 'overwrite') {
+      save(STORAGE_KEYS.FUNDS, data.funds);
+      save(STORAGE_KEYS.PRICE_RECORDS, data.priceRecords);
+      save(STORAGE_KEYS.POSITION_RECORDS, data.positionRecords);
+      save(STORAGE_KEYS.TARGET_RATIOS, data.targetRatios);
+    } else if (mode === 'merge') {
+      var existingFunds = load(STORAGE_KEYS.FUNDS) || [];
+      var existingPriceRecords = load(STORAGE_KEYS.PRICE_RECORDS) || [];
+      var existingPositionRecords = load(STORAGE_KEYS.POSITION_RECORDS) || [];
+      var existingTargetRatios = load(STORAGE_KEYS.TARGET_RATIOS) || {};
+
+      var existingFundIds = new Set(existingFunds.map(function(f) { return f.id; }));
+      var newFunds = data.funds.filter(function(f) { return !existingFundIds.has(f.id); });
+      save(STORAGE_KEYS.FUNDS, existingFunds.concat(newFunds));
+
+      var existingPriceIds = new Set(existingPriceRecords.map(function(r) { return r.id; }));
+      var newPriceRecords = data.priceRecords.filter(function(r) { return !existingPriceIds.has(r.id); });
+      save(STORAGE_KEYS.PRICE_RECORDS, existingPriceRecords.concat(newPriceRecords));
+
+      var existingPositionIds = new Set(existingPositionRecords.map(function(r) { return r.id; }));
+      var newPositionRecords = data.positionRecords.filter(function(r) { return !existingPositionIds.has(r.id); });
+      save(STORAGE_KEYS.POSITION_RECORDS, existingPositionRecords.concat(newPositionRecords));
+
+      save(STORAGE_KEYS.TARGET_RATIOS, Object.assign({}, data.targetRatios, existingTargetRatios));
+    } else {
+      return { success: false, error: '无效的导入模式，请选择 overwrite 或 merge' };
+    }
+    return { success: true };
+  }
+
+  return {
+    save: save,
+    load: load,
+    reset: reset,
+    exportAll: exportAll,
+    validateImportData: validateImportData,
+    importAll: importAll
+  };
+})();
+
+// ============================================================
+// Section C: CalcService
+// ============================================================
+
+var CalcService = (function() {
+  function calcHoldingAmount(fund) {
+    return fund.currentPrice * fund.shares;
+  }
+
+  function calcProfit(fund) {
+    return (fund.currentPrice - fund.buyPrice) * fund.shares;
+  }
+
+  function calcProfitRate(fund) {
+    return ((fund.currentPrice - fund.buyPrice) / fund.buyPrice) * 100;
+  }
+
+  function calcTotalAmount(funds) {
+    if (!funds || funds.length === 0) return 0;
+    return funds.reduce(function(sum, fund) { return sum + calcHoldingAmount(fund); }, 0);
+  }
+
+  function calcTotalProfit(funds) {
+    if (!funds || funds.length === 0) return 0;
+    return funds.reduce(function(sum, fund) { return sum + calcProfit(fund); }, 0);
+  }
+
+  function calcTotalProfitRate(funds) {
+    if (!funds || funds.length === 0) return 0;
+    var totalCost = funds.reduce(function(sum, fund) { return sum + fund.buyPrice * fund.shares; }, 0);
+    if (totalCost === 0) return 0;
+    var totalProfit = calcTotalProfit(funds);
+    return (totalProfit / totalCost) * 100;
+  }
+
+  function calcTodayProfit(funds, priceRecords) {
+    priceRecords = priceRecords || [];
+    if (!funds || funds.length === 0) return 0;
+    if (!priceRecords || priceRecords.length === 0) return 0;
+
+    var today = new Date().toISOString().slice(0, 10);
+    var todayRecords = priceRecords.filter(function(record) {
+      return record.date && record.date.slice(0, 10) === today;
+    });
+
+    var totalTodayProfit = 0;
+    for (var i = 0; i < todayRecords.length; i++) {
+      var record = todayRecords[i];
+      var fund = funds.find(function(f) { return f.id === record.fundId; });
+      if (fund) {
+        totalTodayProfit += (record.newPrice - record.oldPrice) * fund.shares;
+      }
+    }
+    return totalTodayProfit;
+  }
+
+  function calcCategoryRatio(funds) {
+    if (!funds || funds.length === 0) return [];
+    var totalAmount = calcTotalAmount(funds);
+    if (totalAmount === 0) return [];
+
+    var categories = Object.values(FUND_CATEGORIES);
+    var result = [];
+    for (var i = 0; i < categories.length; i++) {
+      var category = categories[i];
+      var categoryFunds = funds.filter(function(f) { return f.category === category; });
+      var amount = categoryFunds.reduce(function(sum, fund) { return sum + calcHoldingAmount(fund); }, 0);
+      var ratio = (amount / totalAmount) * 100;
+      result.push({ category: category, amount: amount, ratio: ratio });
+    }
+    return result;
+  }
+
+  return {
+    calcHoldingAmount: calcHoldingAmount,
+    calcProfit: calcProfit,
+    calcProfitRate: calcProfitRate,
+    calcTotalAmount: calcTotalAmount,
+    calcTotalProfit: calcTotalProfit,
+    calcTotalProfitRate: calcTotalProfitRate,
+    calcTodayProfit: calcTodayProfit,
+    calcCategoryRatio: calcCategoryRatio
+  };
+})();
+
+// ============================================================
+// Section D: FundService
+// ============================================================
+
+var FundService = (function() {
+  function validateFundCode(code) {
+    if (typeof code !== 'string') return false;
+    return /^\d{6}$/.test(code);
+  }
+
+  function validatePositiveNumber(value) {
+    if (typeof value !== 'number') return false;
+    if (!isFinite(value)) return false;
+    return value > 0;
+  }
+
+  function validateFundInput(input) {
+    var errors = [];
+    if (!input || typeof input !== 'object') {
+      errors.push('输入数据无效');
+      return { valid: false, errors: errors };
+    }
+
+    if (!input.code && input.code !== 0) {
+      errors.push('基金代码为必填项');
+    } else if (!validateFundCode(input.code)) {
+      errors.push('基金代码必须为6位数字');
+    }
+
+    if (!input.name && input.name !== 0) {
+      errors.push('基金名称为必填项');
+    } else if (typeof input.name !== 'string' || input.name.trim() === '') {
+      errors.push('基金名称不能为空');
+    }
+
+    if (!input.category) {
+      errors.push('基金分类为必填项');
+    } else {
+      var validCategories = Object.values(FUND_CATEGORIES);
+      if (!validCategories.includes(input.category)) {
+        errors.push('基金分类无效，必须为 bond、a_stock 或 global_stock');
+      }
+    }
+
+    if (input.buyPrice === undefined || input.buyPrice === null) {
+      errors.push('买入净值为必填项');
+    } else if (!validatePositiveNumber(input.buyPrice)) {
+      errors.push('买入净值必须为正数');
+    }
+
+    if (input.shares === undefined || input.shares === null) {
+      errors.push('持有份额为必填项');
+    } else if (!validatePositiveNumber(input.shares)) {
+      errors.push('持有份额必须为正数');
+    }
+
+    if (input.currentPrice !== undefined && input.currentPrice !== null) {
+      if (!validatePositiveNumber(input.currentPrice)) {
+        errors.push('当前净值必须为正数');
+      }
+    }
+
+    return { valid: errors.length === 0, errors: errors };
+  }
+
+  function addFund(input) {
+    var validation = validateFundInput(input);
+    if (!validation.valid) {
+      return { success: false, errors: validation.errors };
+    }
+
+    var fundInput = {
+      code: input.code,
+      name: input.name.trim(),
+      category: input.category,
+      buyPrice: input.buyPrice,
+      currentPrice: input.currentPrice || input.buyPrice,
+      shares: input.shares,
+      note: input.note || ''
+    };
+
+    var fund = createFund(fundInput);
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    funds.push(fund);
+    StorageService.save(STORAGE_KEYS.FUNDS, funds);
+    return { success: true, fund: fund };
+  }
+
+  function updateFund(id, updates) {
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    var index = funds.findIndex(function(f) { return f.id === id; });
+    if (index === -1) {
+      return { success: false, errors: ['基金不存在'] };
+    }
+
+    var errors = [];
+    if (updates.code !== undefined) {
+      if (!validateFundCode(updates.code)) errors.push('基金代码必须为6位数字');
+    }
+    if (updates.name !== undefined) {
+      if (typeof updates.name !== 'string' || updates.name.trim() === '') errors.push('基金名称不能为空');
+    }
+    if (updates.category !== undefined) {
+      var validCategories = Object.values(FUND_CATEGORIES);
+      if (!validCategories.includes(updates.category)) errors.push('基金分类无效，必须为 bond、a_stock 或 global_stock');
+    }
+    if (updates.buyPrice !== undefined) {
+      if (!validatePositiveNumber(updates.buyPrice)) errors.push('买入净值必须为正数');
+    }
+    if (updates.currentPrice !== undefined) {
+      if (!validatePositiveNumber(updates.currentPrice)) errors.push('当前净值必须为正数');
+    }
+    if (updates.shares !== undefined) {
+      if (!validatePositiveNumber(updates.shares)) errors.push('持有份额必须为正数');
+    }
+    if (errors.length > 0) {
+      return { success: false, errors: errors };
+    }
+
+    var fund = funds[index];
+    var allowedFields = ['code', 'name', 'category', 'buyPrice', 'currentPrice', 'shares', 'note'];
+    for (var i = 0; i < allowedFields.length; i++) {
+      var field = allowedFields[i];
+      if (updates[field] !== undefined) {
+        if (field === 'name') {
+          fund[field] = updates[field].trim();
+        } else {
+          fund[field] = updates[field];
+        }
+      }
+    }
+    fund.lastUpdated = new Date().toISOString();
+    funds[index] = fund;
+    StorageService.save(STORAGE_KEYS.FUNDS, funds);
+    return { success: true, fund: fund };
+  }
+
+  function deleteFund(id) {
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    var index = funds.findIndex(function(f) { return f.id === id; });
+    if (index === -1) {
+      return { success: false, errors: ['基金不存在'] };
+    }
+    funds.splice(index, 1);
+    StorageService.save(STORAGE_KEYS.FUNDS, funds);
+
+    var priceRecords = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
+    var filteredPriceRecords = priceRecords.filter(function(r) { return r.fundId !== id; });
+    StorageService.save(STORAGE_KEYS.PRICE_RECORDS, filteredPriceRecords);
+
+    var positionRecords = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+    var filteredPositionRecords = positionRecords.filter(function(r) { return r.fundId !== id; });
+    StorageService.save(STORAGE_KEYS.POSITION_RECORDS, filteredPositionRecords);
+
+    return { success: true };
+  }
+
+  function getFund(id) {
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    return funds.find(function(f) { return f.id === id; }) || null;
+  }
+
+  function getAllFunds() {
+    return StorageService.load(STORAGE_KEYS.FUNDS) || [];
+  }
+
+  function getFundsByCategory(category) {
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    return funds.filter(function(f) { return f.category === category; });
+  }
+
+  return {
+    validateFundCode: validateFundCode,
+    validatePositiveNumber: validatePositiveNumber,
+    validateFundInput: validateFundInput,
+    addFund: addFund,
+    updateFund: updateFund,
+    deleteFund: deleteFund,
+    getFund: getFund,
+    getAllFunds: getAllFunds,
+    getFundsByCategory: getFundsByCategory
+  };
+})();
+
+// ============================================================
+// Section E: RecordService
+// ============================================================
+
+var RecordService = (function() {
+  function addPriceChangeRecord(fundId, oldPrice, newPrice) {
+    var errors = [];
+    if (!fundId || typeof fundId !== 'string') errors.push('基金ID无效');
+    if (typeof oldPrice !== 'number' || !isFinite(oldPrice) || oldPrice <= 0) errors.push('旧净值必须为正数');
+    if (typeof newPrice !== 'number' || !isFinite(newPrice) || newPrice <= 0) errors.push('新净值必须为正数');
+    if (errors.length > 0) return { success: false, errors: errors };
+
+    var record = createPriceChangeRecord({ fundId: fundId, oldPrice: oldPrice, newPrice: newPrice });
+    var records = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
+    records.push(record);
+    StorageService.save(STORAGE_KEYS.PRICE_RECORDS, records);
+    return { success: true, record: record };
+  }
+
+  function getPriceChangeRecords(fundId) {
+    var records = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
+    return records
+      .filter(function(r) { return r.fundId === fundId; })
+      .sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  }
+
+  function addPositionRecord(fundId, record) {
+    var errors = [];
+    if (!fundId || typeof fundId !== 'string') errors.push('基金ID无效');
+    if (!record || typeof record !== 'object') {
+      errors.push('操作记录无效');
+      return { success: false, errors: errors };
+    }
+
+    var type = record.type;
+    var price = record.price;
+    var shares = record.shares;
+
+    if (!type || (type !== POSITION_TYPES.BUY && type !== POSITION_TYPES.SELL)) {
+      errors.push('操作类型无效，必须为 buy 或 sell');
+    }
+    if (typeof price !== 'number' || !isFinite(price) || price <= 0) {
+      errors.push('操作净值必须为正数');
+    }
+    if (typeof shares !== 'number' || !isFinite(shares) || shares <= 0) {
+      errors.push('操作份额必须为正数');
+    }
+    if (errors.length > 0) return { success: false, errors: errors };
+
+    var funds = StorageService.load(STORAGE_KEYS.FUNDS) || [];
+    var fundIndex = funds.findIndex(function(f) { return f.id === fundId; });
+    if (fundIndex === -1) return { success: false, errors: ['基金不存在'] };
+
+    var fund = funds[fundIndex];
+    if (type === POSITION_TYPES.SELL) {
+      if (shares > fund.shares) {
+        return { success: false, errors: ['减仓份额不能超过当前持有份额'] };
+      }
+    }
+
+    var positionRecord = createPositionRecord({ fundId: fundId, type: type, price: price, shares: shares });
+
+    if (type === POSITION_TYPES.BUY) {
+      var oldTotalCost = fund.buyPrice * fund.shares;
+      var newCost = price * shares;
+      var newTotalShares = fund.shares + shares;
+      fund.buyPrice = (oldTotalCost + newCost) / newTotalShares;
+      fund.shares = newTotalShares;
+    } else {
+      fund.shares = fund.shares - shares;
+    }
+
+    fund.lastUpdated = new Date().toISOString();
+    funds[fundIndex] = fund;
+    StorageService.save(STORAGE_KEYS.FUNDS, funds);
+
+    var positionRecords = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+    positionRecords.push(positionRecord);
+    StorageService.save(STORAGE_KEYS.POSITION_RECORDS, positionRecords);
+    return { success: true, record: positionRecord };
+  }
+
+  function getPositionRecords(fundId) {
+    var records = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+    return records
+      .filter(function(r) { return r.fundId === fundId; })
+      .sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  }
+
+  function calcAverageCost(fundId) {
+    var records = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+    var buyRecords = records.filter(function(r) { return r.fundId === fundId && r.type === POSITION_TYPES.BUY; });
+    if (buyRecords.length === 0) return 0;
+    var totalAmount = buyRecords.reduce(function(sum, r) { return sum + r.price * r.shares; }, 0);
+    var totalShares = buyRecords.reduce(function(sum, r) { return sum + r.shares; }, 0);
+    if (totalShares === 0) return 0;
+    return totalAmount / totalShares;
+  }
+
+  return {
+    addPriceChangeRecord: addPriceChangeRecord,
+    getPriceChangeRecords: getPriceChangeRecords,
+    addPositionRecord: addPositionRecord,
+    getPositionRecords: getPositionRecords,
+    calcAverageCost: calcAverageCost
+  };
+})();
+
+// ============================================================
+// Section F: RatioService
+// ============================================================
+
+var RatioService = (function() {
+  function validateRatioSum(ratios) {
+    if (!ratios || typeof ratios !== 'object') return false;
+    var bond = Number(ratios.bond);
+    var aStock = Number(ratios.a_stock);
+    var globalStock = Number(ratios.global_stock);
+    if (isNaN(bond) || isNaN(aStock) || isNaN(globalStock)) return false;
+    if (bond < 0 || aStock < 0 || globalStock < 0) return false;
+    var sum = bond + aStock + globalStock;
+    return Math.abs(sum - 100) < 0.01;
+  }
+
+  function setTargetRatios(ratios) {
+    if (!validateRatioSum(ratios)) {
+      return { success: false, error: '所有分类比例之和必须等于100%' };
+    }
+    var targetRatios = {
+      bond: Number(ratios.bond),
+      a_stock: Number(ratios.a_stock),
+      global_stock: Number(ratios.global_stock)
+    };
+    StorageService.save(STORAGE_KEYS.TARGET_RATIOS, targetRatios);
+    return { success: true };
+  }
+
+  function getTargetRatios() {
+    var stored = StorageService.load(STORAGE_KEYS.TARGET_RATIOS);
+    if (stored && typeof stored === 'object' && validateRatioSum(stored)) {
+      return stored;
+    }
+    return Object.assign({}, DEFAULT_TARGET_RATIOS);
+  }
+
+  function calcActualRatios(funds) {
+    if (!funds || funds.length === 0) {
+      return Object.values(FUND_CATEGORIES).map(function(category) {
+        return { category: category, ratio: 0 };
+      });
+    }
+    var categoryRatios = CalcService.calcCategoryRatio(funds);
+    if (categoryRatios.length === 0) {
+      return Object.values(FUND_CATEGORIES).map(function(category) {
+        return { category: category, ratio: 0 };
+      });
+    }
+    return categoryRatios.map(function(item) {
+      return { category: item.category, ratio: item.ratio };
+    });
+  }
+
+  function calcDeviation(target, actual) {
+    var THRESHOLD = 5;
+    return actual.map(function(item) {
+      var targetRatio = target[item.category] || 0;
+      var deviation = item.ratio - targetRatio;
+      var exceeded = Math.abs(deviation) > THRESHOLD;
+      return {
+        category: item.category,
+        target: targetRatio,
+        actual: item.ratio,
+        deviation: deviation,
+        exceeded: exceeded
+      };
+    });
+  }
+
+  return {
+    setTargetRatios: setTargetRatios,
+    getTargetRatios: getTargetRatios,
+    calcActualRatios: calcActualRatios,
+    calcDeviation: calcDeviation,
+    validateRatioSum: validateRatioSum
+  };
+})();
+
+// ============================================================
+// Section G: FundAPI (JSONP fund data fetching)
+// ============================================================
+
+var FundAPI = (function() {
+  var TIMEOUT_MS = 5000;
+
+  function fetchFundInfo(code) {
+    return new Promise(function(resolve) {
+      var callbackName = 'jsonpgz';
+      var script = document.createElement('script');
+      var timer = null;
+      var settled = false;
+
+      function cleanup() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+        if (window[callbackName] && window[callbackName]._fundApi) {
+          delete window[callbackName];
+        }
+      }
+
+      function settle(value) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      }
+
+      timer = setTimeout(function() { settle(null); }, TIMEOUT_MS);
+
+      window[callbackName] = function(data) {
+        if (!data || !data.name || !data.dwjz) { settle(null); return; }
+        var netValue = parseFloat(data.dwjz);
+        if (isNaN(netValue) || netValue <= 0) { settle(null); return; }
+        settle({ name: data.name, netValue: netValue });
+      };
+      window[callbackName]._fundApi = true;
+
+      script.onerror = function() { settle(null); };
+
+      var timestamp = Date.now();
+      script.src = 'http://fundgz.1702.com/js/' + code + '.js?rt=' + timestamp;
+      document.head.appendChild(script);
+    });
+  }
+
+  function refreshAllNetValues(funds) {
+    if (!Array.isArray(funds) || funds.length === 0) {
+      return Promise.resolve([]);
+    }
+
+    var results = [];
+    var chain = Promise.resolve();
+
+    funds.forEach(function(fund) {
+      chain = chain.then(function() {
+        return fetchFundInfo(fund.code).then(function(info) {
+          if (!info) {
+            results.push({ fundId: fund.id, code: fund.code, success: false, error: '获取净值失败' });
+            return;
+          }
+          var oldPrice = fund.currentPrice;
+          var newPrice = info.netValue;
+          if (oldPrice !== newPrice) {
+            RecordService.addPriceChangeRecord(fund.id, oldPrice, newPrice);
+            FundService.updateFund(fund.id, { currentPrice: newPrice });
+          }
+          results.push({ fundId: fund.id, code: fund.code, success: true, oldPrice: oldPrice, newPrice: newPrice });
+        }).catch(function(err) {
+          results.push({ fundId: fund.id, code: fund.code, success: false, error: err.message || '未知错误' });
+        });
+      });
+    });
+
+    return chain.then(function() { return results; });
+  }
+
+  return {
+    fetchFundInfo: fetchFundInfo,
+    refreshAllNetValues: refreshAllNetValues
+  };
+})();
+
+// ============================================================
+// Section H: App Logic (routing, rendering, event handlers)
+// ============================================================
+
+// State
+var currentView = 'dashboard';
+var currentFundId = null;
+var detailTab = 'info';
+
+// Utility functions
+function $(sel) { return document.querySelector(sel); }
+function formatMoney(n) { return n >= 0 ? '¥' + n.toFixed(2) : '-¥' + Math.abs(n).toFixed(2); }
+function formatRate(n) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
+function formatDate(iso) {
+  if (!iso) return '-';
+  var d = new Date(iso);
+  var now = new Date();
+  var diff = now - d;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return Math.floor(diff/60000) + '分钟前';
+  if (diff < 86400000) return Math.floor(diff/3600000) + '小时前';
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+function profitClass(n) { return n > 0 ? 'text-profit' : n < 0 ? 'text-loss' : ''; }
+
+function showToast(msg) {
+  var el = document.getElementById('toastEl');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 2500);
+}
+
+// Navigation
+function navigate(view, opts) {
+  opts = opts || {};
+  currentView = view;
+  if (opts.fundId) currentFundId = opts.fundId;
+  if (opts.detailTab) detailTab = opts.detailTab;
+  render();
+}
+
+window._nav = navigate;
+
+// Main render function
+function render() {
+  var main = $('#appMain');
+  var header = $('#appHeader');
+  var tabBar = $('#tabBar');
+
+  if (['dashboard', 'fundList', 'settings'].indexOf(currentView) !== -1) {
+    tabBar.innerHTML =
+      '<button class="tab-item ' + (currentView==='dashboard'?'active':'') + '" onclick="window._nav(\'dashboard\')"><span class="tab-icon">📊</span>仪表盘</button>' +
+      '<button class="tab-item ' + (currentView==='fundList'?'active':'') + '" onclick="window._nav(\'fundList\')"><span class="tab-icon">📋</span>基金列表</button>' +
+      '<button class="tab-item ' + (currentView==='settings'?'active':'') + '" onclick="window._nav(\'settings\')"><span class="tab-icon">⚙️</span>设置</button>';
+    tabBar.style.display = 'flex';
+  } else {
+    tabBar.style.display = 'none';
+  }
+
+  switch(currentView) {
+    case 'dashboard': renderDashboard(main, header); break;
+    case 'fundList': renderFundList(main, header); break;
+    case 'fundDetail': renderFundDetail(main, header); break;
+    case 'settings': renderSettings(main, header); break;
+  }
+}
+
+// Dashboard view
+function renderDashboard(main, header) {
+  header.innerHTML = '<span>个人基金管理</span>';
+  var funds = FundService.getAllFunds();
+  var priceRecords = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
+  var totalAmount = CalcService.calcTotalAmount(funds);
+  var totalProfit = CalcService.calcTotalProfit(funds);
+  var totalProfitRate = CalcService.calcTotalProfitRate(funds);
+  var todayProfit = CalcService.calcTodayProfit(funds, priceRecords);
+  var targetRatios = RatioService.getTargetRatios();
+  var actualRatios = RatioService.calcActualRatios(funds);
+  var deviations = RatioService.calcDeviation(targetRatios, actualRatios);
+  var categoryRatios = CalcService.calcCategoryRatio(funds);
+
+  var catLabels = { bond: '债基', a_stock: 'A股', global_stock: '全球股' };
+  var catColors = { bond: '#4a90d9', a_stock: '#e74c3c', global_stock: '#27ae60' };
+
+  var categoryHtml = '';
+  if (categoryRatios.length === 0) {
+    categoryHtml = '<div class="text-muted">暂无基金数据</div>';
+  } else {
+    for (var i = 0; i < categoryRatios.length; i++) {
+      var cr = categoryRatios[i];
+      categoryHtml += '<div style="margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">' +
+        '<span>' + catLabels[cr.category] + '</span>' +
+        '<span>' + formatMoney(cr.amount) + ' (' + cr.ratio.toFixed(1) + '%)</span></div>' +
+        '<div style="height:8px;background:#e9ecef;border-radius:4px;overflow:hidden">' +
+        '<div style="height:100%;width:' + cr.ratio + '%;background:' + catColors[cr.category] + ';border-radius:4px;transition:width 0.3s"></div>' +
+        '</div></div>';
+    }
+  }
+
+  var deviationHtml = '';
+  for (var j = 0; j < deviations.length; j++) {
+    var d = deviations[j];
+    deviationHtml += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:14px">' +
+      '<span style="width:60px;font-weight:500">' + catLabels[d.category] + '</span>' +
+      '<span style="flex:1">' + d.actual.toFixed(1) + '% / ' + d.target.toFixed(1) + '%</span>' +
+      '<span style="font-size:12px;padding:2px 6px;border-radius:4px;' + (d.exceeded ? 'color:#f39c12;background:#fef9e7;font-weight:600' : 'color:#888') + '">' +
+      (d.deviation >= 0 ? '+' : '') + d.deviation.toFixed(1) + '%' + (d.exceeded ? ' ⚠️' : '') +
+      '</span></div>';
+  }
+
+  main.innerHTML =
+    '<div class="card" style="background:linear-gradient(135deg,#4a90d9,#357abd);color:#fff;border:none">' +
+    '<div style="font-size:13px;opacity:0.9;margin-bottom:4px">总资产</div>' +
+    '<div style="font-size:28px;font-weight:700;margin-bottom:12px">' + formatMoney(totalAmount) + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">' +
+    '<div><div style="opacity:0.8">总收益</div><div style="font-size:14px;font-weight:600">' + formatMoney(totalProfit) + '</div></div>' +
+    '<div><div style="opacity:0.8">收益率</div><div style="font-size:14px;font-weight:600">' + formatRate(totalProfitRate) + '</div></div>' +
+    '<div><div style="opacity:0.8">今日收益</div><div style="font-size:14px;font-weight:600">' + formatMoney(todayProfit) + '</div></div>' +
+    '</div></div>' +
+    '<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">分类持有占比</div>' + categoryHtml + '</div>' +
+    '<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">比例对比（当前 vs 目标）</div>' + deviationHtml + '</div>';
+}
+
+// Fund list view
+function renderFundList(main, header) {
+  header.innerHTML = '<span>基金列表</span>';
+  var funds = FundService.getAllFunds();
+  var categories = [
+    { key: FUND_CATEGORIES.BOND, label: '债基' },
+    { key: FUND_CATEGORIES.A_STOCK, label: 'A股' },
+    { key: FUND_CATEGORIES.GLOBAL_STOCK, label: '全球股' }
+  ];
+
+  if (funds.length === 0) {
+    main.innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📂</div><p>暂无基金，点击右下角添加</p></div>' +
+      '<button class="fab" onclick="window._showAddFundModal()">+</button>';
+    return;
+  }
+
+  var html = '';
+  for (var c = 0; c < categories.length; c++) {
+    var cat = categories[c];
+    var catFunds = funds.filter(function(f) { return f.category === cat.key; });
+    if (catFunds.length === 0) continue;
+    var catTotal = catFunds.reduce(function(s, f) { return s + CalcService.calcHoldingAmount(f); }, 0);
+
+    html += '<div class="category-section"><div class="category-header"><h3>' + cat.label + '</h3>' +
+      '<span class="cat-info">' + catFunds.length + '只 · ' + formatMoney(catTotal) + '</span></div>';
+
+    for (var i = 0; i < catFunds.length; i++) {
+      var fund = catFunds[i];
+      var amount = CalcService.calcHoldingAmount(fund);
+      var rate = CalcService.calcProfitRate(fund);
+      html += '<div class="fund-item" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'info\'})">' +
+        '<div class="fund-top"><span><span class="fund-name">' + fund.name + '</span><span class="fund-code">' + fund.code + '</span></span>' +
+        '<span class="fund-amount">' + formatMoney(amount) + '</span></div>' +
+        '<div class="fund-bottom"><span>净值 ' + fund.currentPrice.toFixed(4) + ' · ' + fund.shares.toFixed(2) + '份</span>' +
+        '<span class="' + profitClass(rate) + '">' + formatRate(rate) + '</span></div>' +
+        (fund.note ? '<div class="fund-note">' + fund.note + '</div>' : '') +
+        '</div>';
+    }
+    html += '</div>';
+  }
+
+  html += '<button class="fab" onclick="window._showAddFundModal()">+</button>';
+  main.innerHTML = html;
+}
+
+// Fund detail view
+function renderFundDetail(main, header) {
+  var fund = FundService.getFund(currentFundId);
+  if (!fund) { navigate('fundList'); return; }
+
+  header.innerHTML = '<button class="back-btn" onclick="window._nav(\'fundList\')">←</button><span>' + fund.name + '</span>';
+
+  var amount = CalcService.calcHoldingAmount(fund);
+  var profit = CalcService.calcProfit(fund);
+  var rate = CalcService.calcProfitRate(fund);
+
+  var html =
+    '<div class="card" style="text-align:center">' +
+    '<div style="font-size:13px;color:#888">持有金额</div>' +
+    '<div style="font-size:24px;font-weight:700;margin:4px 0">' + formatMoney(amount) + '</div>' +
+    '<div class="' + profitClass(profit) + '" style="font-size:14px">收益 ' + formatMoney(profit) + ' (' + formatRate(rate) + ')</div></div>' +
+    '<div class="section-tabs">' +
+    '<button class="section-tab ' + (detailTab==='info'?'active':'') + '" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'info\'})">基金信息</button>' +
+    '<button class="section-tab ' + (detailTab==='priceRecords'?'active':'') + '" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'priceRecords\'})">涨跌记录</button>' +
+    '<button class="section-tab ' + (detailTab==='positionRecords'?'active':'') + '" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'positionRecords\'})">加减仓</button></div>';
+
+  if (detailTab === 'info') {
+    html += renderDetailInfo(fund);
+  } else if (detailTab === 'priceRecords') {
+    html += renderPriceRecords(fund);
+  } else {
+    html += renderPositionRecords(fund);
+  }
+
+  main.innerHTML = html;
+}
+
+function renderDetailInfo(fund) {
+  var catLabels = { bond: '债基', a_stock: 'A股', global_stock: '全球股' };
+  return '<div class="card">' +
+    '<div class="detail-row"><span class="label">基金代码</span><span class="value">' + fund.code + '</span></div>' +
+    '<div class="detail-row"><span class="label">基金名称</span><span class="value">' + fund.name + '</span></div>' +
+    '<div class="detail-row"><span class="label">分类</span><span class="value">' + catLabels[fund.category] + '</span></div>' +
+    '<div class="detail-row"><span class="label">当前净值</span><span class="value">' + fund.currentPrice.toFixed(4) + '</span></div>' +
+    '<div class="detail-row"><span class="label">买入净值</span><span class="value">' + fund.buyPrice.toFixed(4) + '</span></div>' +
+    '<div class="detail-row"><span class="label">持有份额</span><span class="value">' + fund.shares.toFixed(2) + '</span></div>' +
+    '<div class="detail-row"><span class="label">备注</span><span class="value">' + (fund.note || '-') + '</span></div>' +
+    '<div class="detail-row"><span class="label">最后更新</span><span class="value">' + formatDate(fund.lastUpdated) + '</span></div></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button class="btn btn-primary btn-sm" onclick="window._refreshFundPrice(\'' + fund.id + '\')">🔄 刷新净值</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="window._showEditFundModal(\'' + fund.id + '\')">✏️ 编辑</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="window._showDeleteConfirm(\'' + fund.id + '\')">🗑️ 删除</button></div>';
+}
+
+function renderPriceRecords(fund) {
+  var records = RecordService.getPriceChangeRecords(fund.id);
+  if (records.length === 0) {
+    return '<div class="empty-state"><p>暂无涨跌记录</p></div>';
+  }
+  var html = '<div class="card">';
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var isUp = r.newPrice > r.oldPrice;
+    var color = isUp ? '#e74c3c' : r.newPrice < r.oldPrice ? '#27ae60' : '#888';
+    html += '<div class="record-item"><div class="record-top">' +
+      '<span style="color:' + color + ';font-weight:500">' + (isUp ? '↑' : '↓') + ' ' + r.oldPrice.toFixed(4) + ' → ' + r.newPrice.toFixed(4) + '</span>' +
+      '<span style="color:' + color + '">' + formatRate(r.changeRate) + '</span></div>' +
+      '<div class="record-date">' + formatDate(r.date) + '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderPositionRecords(fund) {
+  var records = RecordService.getPositionRecords(fund.id);
+  var html = '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+    '<button class="btn btn-primary btn-sm" onclick="window._showPositionModal(\'' + fund.id + '\',\'buy\')">➕ 加仓</button>' +
+    '<button class="btn btn-warning btn-sm" onclick="window._showPositionModal(\'' + fund.id + '\',\'sell\')">➖ 减仓</button></div>';
+
+  if (records.length === 0) {
+    html += '<div class="empty-state"><p>暂无加减仓记录</p></div>';
+    return html;
+  }
+  html += '<div class="card">';
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var isBuy = r.type === 'buy';
+    html += '<div class="record-item"><div class="record-top">' +
+      '<span style="color:' + (isBuy ? '#e74c3c' : '#27ae60') + ';font-weight:500">' + (isBuy ? '加仓' : '减仓') + '</span>' +
+      '<span>' + formatMoney(r.amount) + '</span></div>' +
+      '<div style="font-size:12px;color:#888">净值 ' + r.price.toFixed(4) + ' · ' + r.shares.toFixed(2) + '份</div>' +
+      '<div class="record-date">' + formatDate(r.date) + '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Settings view
+function renderSettings(main, header) {
+  header.innerHTML = '<span>设置</span>';
+  var targetRatios = RatioService.getTargetRatios();
+
+  main.innerHTML =
+    '<div class="setting-section"><h3>📊 目标比例设置</h3><div class="card">' +
+    '<div class="form-group"><label>债基比例 (%)</label><input type="number" id="ratioBond" value="' + targetRatios.bond + '" min="0" max="100" step="1"></div>' +
+    '<div class="form-group"><label>A股比例 (%)</label><input type="number" id="ratioAStock" value="' + targetRatios.a_stock + '" min="0" max="100" step="1"></div>' +
+    '<div class="form-group"><label>全球股比例 (%)</label><input type="number" id="ratioGlobal" value="' + targetRatios.global_stock + '" min="0" max="100" step="1"></div>' +
+    '<div id="ratioError" class="error-text" style="margin-bottom:8px"></div>' +
+    '<div id="ratioSum" class="text-muted" style="margin-bottom:12px">当前总和: ' + (targetRatios.bond + targetRatios.a_stock + targetRatios.global_stock) + '%</div>' +
+    '<button class="btn btn-primary btn-block" onclick="window._saveRatios()">保存比例</button></div>' +
+    renderDeviationWarnings() + '</div>' +
+    '<div class="setting-section"><h3>🔄 批量刷新净值</h3><div class="card">' +
+    '<p class="text-muted" style="margin-bottom:12px">一键刷新所有基金的最新净值，自动创建涨跌记录</p>' +
+    '<button class="btn btn-primary btn-block" id="refreshAllBtn" onclick="window._refreshAll()">一键刷新所有净值</button>' +
+    '<div id="refreshResult"></div></div></div>' +
+    '<div class="setting-section"><h3>💾 数据管理</h3><div class="card">' +
+    '<button class="btn btn-secondary btn-block" style="margin-bottom:8px" onclick="window._exportData()">📤 导出数据 (JSON)</button>' +
+    '<button class="btn btn-secondary btn-block" style="margin-bottom:8px" onclick="document.getElementById(\'importFile\').click()">📥 导入数据</button>' +
+    '<input type="file" id="importFile" accept=".json" style="display:none" onchange="window._importData(event)">' +
+    '<button class="btn btn-danger btn-block" onclick="window._resetData()">🗑️ 重置所有数据</button></div></div>';
+
+  // Live ratio sum update
+  var inputs = ['ratioBond', 'ratioAStock', 'ratioGlobal'];
+  inputs.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', function() {
+      var sum = inputs.reduce(function(s, i) { return s + (parseFloat(document.getElementById(i).value) || 0); }, 0);
+      var sumEl = document.getElementById('ratioSum');
+      if (sumEl) {
+        sumEl.textContent = '当前总和: ' + sum + '%';
+        sumEl.style.color = Math.abs(sum - 100) < 0.01 ? '#27ae60' : '#e74c3c';
+      }
+    });
+  });
+}
+
+function renderDeviationWarnings() {
+  var funds = FundService.getAllFunds();
+  if (funds.length === 0) return '';
+  var targetRatios = RatioService.getTargetRatios();
+  var actualRatios = RatioService.calcActualRatios(funds);
+  var deviations = RatioService.calcDeviation(targetRatios, actualRatios);
+  var catLabels = { bond: '债基', a_stock: 'A股', global_stock: '全球股' };
+
+  var exceeded = deviations.filter(function(d) { return d.exceeded; });
+  if (exceeded.length === 0) return '';
+
+  var html = '<div class="card" style="border-left:3px solid #f39c12">' +
+    '<div style="font-size:13px;color:#f39c12;font-weight:600;margin-bottom:8px">⚠️ 偏差超限提醒</div>';
+  for (var i = 0; i < exceeded.length; i++) {
+    var d = exceeded[i];
+    html += '<div style="font-size:13px;color:#f39c12;margin-bottom:4px">' + catLabels[d.category] + ': 偏差 ' + (d.deviation > 0 ? '+' : '') + d.deviation.toFixed(1) + '%</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ============================================================
+// Modals: Add/Edit Fund
+// ============================================================
+
+window._showAddFundModal = function() {
+  showFundModal(null);
+};
+
+window._showEditFundModal = function(fundId) {
+  var fund = FundService.getFund(fundId);
+  if (fund) showFundModal(fund);
+};
+
+function showFundModal(fund) {
+  var isEdit = !!fund;
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal"><h2>' + (isEdit ? '编辑基金' : '添加基金') + '</h2>' +
+    '<div class="form-group"><label>基金代码 *</label>' +
+    '<input type="text" id="fundCode" value="' + (fund ? fund.code : '') + '" maxlength="6" placeholder="6位数字代码" ' + (isEdit ? 'readonly' : '') + '>' +
+    '<div id="fundCodeHint" class="hint-text">' + (isEdit ? '' : '输入6位代码后自动获取基金信息') + '</div>' +
+    '<div id="fundCodeError" class="error-text"></div></div>' +
+    '<div class="form-group"><label>基金名称 *</label>' +
+    '<input type="text" id="fundName" value="' + (fund ? fund.name : '') + '" placeholder="基金名称">' +
+    '<div id="fundNameError" class="error-text"></div></div>' +
+    '<div class="form-group"><label>分类 *</label>' +
+    '<select id="fundCategory"><option value="">请选择分类</option>' +
+    '<option value="bond" ' + (fund && fund.category==='bond' ? 'selected' : '') + '>债基</option>' +
+    '<option value="a_stock" ' + (fund && fund.category==='a_stock' ? 'selected' : '') + '>A股</option>' +
+    '<option value="global_stock" ' + (fund && fund.category==='global_stock' ? 'selected' : '') + '>全球股</option></select>' +
+    '<div id="fundCategoryError" class="error-text"></div></div>' +
+    '<div class="form-group"><label>买入净值 *</label>' +
+    '<input type="number" id="fundBuyPrice" value="' + (fund ? fund.buyPrice : '') + '" step="0.0001" min="0" placeholder="如 1.2345">' +
+    '<div id="fundBuyPriceError" class="error-text"></div></div>' +
+    '<div class="form-group"><label>当前净值</label>' +
+    '<input type="number" id="fundCurrentPrice" value="' + (fund ? fund.currentPrice : '') + '" step="0.0001" min="0" placeholder="留空则等于买入净值"></div>' +
+    '<div class="form-group"><label>持有份额 *</label>' +
+    '<input type="number" id="fundShares" value="' + (fund ? fund.shares : '') + '" step="0.01" min="0" placeholder="如 1000">' +
+    '<div id="fundSharesError" class="error-text"></div></div>' +
+    '<div class="form-group"><label>备注</label>' +
+    '<textarea id="fundNote" rows="2" placeholder="如：定投中、等回调加仓">' + (fund ? fund.note : '') + '</textarea></div>' +
+    '<div class="form-actions">' +
+    '<button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-primary" id="fundSubmitBtn">' + (isEdit ? '保存' : '添加') + '</button></div></div>';
+
+  document.body.appendChild(overlay);
+
+  // Auto-fetch fund info on code input
+  if (!isEdit) {
+    var codeInput = document.getElementById('fundCode');
+    var fetchTimer = null;
+    codeInput.addEventListener('input', function() {
+      clearTimeout(fetchTimer);
+      var code = codeInput.value.trim();
+      if (/^\d{6}$/.test(code)) {
+        document.getElementById('fundCodeHint').textContent = '正在获取基金信息...';
+        fetchTimer = setTimeout(function() {
+          FundAPI.fetchFundInfo(code).then(function(info) {
+            if (info) {
+              document.getElementById('fundName').value = info.name;
+              document.getElementById('fundCurrentPrice').value = info.netValue;
+              document.getElementById('fundCodeHint').textContent = '✓ 已自动获取基金信息';
+              document.getElementById('fundCodeHint').style.color = '#27ae60';
+            } else {
+              document.getElementById('fundCodeHint').textContent = '获取失败，请手动输入';
+              document.getElementById('fundCodeHint').style.color = '#f39c12';
+            }
+          }).catch(function() {
+            document.getElementById('fundCodeHint').textContent = '获取失败，请手动输入';
+            document.getElementById('fundCodeHint').style.color = '#f39c12';
+          });
+        }, 500);
+      }
+    });
+  }
+
+  // Submit handler
+  document.getElementById('fundSubmitBtn').addEventListener('click', function() {
+    ['fundCodeError','fundNameError','fundCategoryError','fundBuyPriceError','fundSharesError'].forEach(function(id) {
+      document.getElementById(id).textContent = '';
+    });
+
+    var code = document.getElementById('fundCode').value.trim();
+    var name = document.getElementById('fundName').value.trim();
+    var category = document.getElementById('fundCategory').value;
+    var buyPrice = parseFloat(document.getElementById('fundBuyPrice').value);
+    var currentPrice = parseFloat(document.getElementById('fundCurrentPrice').value) || undefined;
+    var shares = parseFloat(document.getElementById('fundShares').value);
+    var note = document.getElementById('fundNote').value.trim();
+
+    if (isEdit) {
+      var result = FundService.updateFund(fund.id, { code: code, name: name, category: category, buyPrice: buyPrice, currentPrice: currentPrice, shares: shares, note: note });
+      if (!result.success) { showFormErrors(result.errors); return; }
+      overlay.remove();
+      showToast('基金已更新');
+      navigate('fundDetail', { fundId: fund.id, detailTab: 'info' });
+    } else {
+      var result = FundService.addFund({ code: code, name: name, category: category, buyPrice: buyPrice, currentPrice: currentPrice, shares: shares, note: note });
+      if (!result.success) { showFormErrors(result.errors); return; }
+      overlay.remove();
+      showToast('基金已添加');
+      navigate('fundList');
+    }
+  });
+
+  // Close on overlay click
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
+function showFormErrors(errors) {
+  for (var i = 0; i < errors.length; i++) {
+    var err = errors[i];
+    if (err.indexOf('代码') !== -1) document.getElementById('fundCodeError').textContent = err;
+    else if (err.indexOf('名称') !== -1) document.getElementById('fundNameError').textContent = err;
+    else if (err.indexOf('分类') !== -1) document.getElementById('fundCategoryError').textContent = err;
+    else if (err.indexOf('净值') !== -1 && err.indexOf('买入') !== -1) document.getElementById('fundBuyPriceError').textContent = err;
+    else if (err.indexOf('份额') !== -1) document.getElementById('fundSharesError').textContent = err;
+    else if (err.indexOf('净值') !== -1) document.getElementById('fundBuyPriceError').textContent = err;
+    else {
+      var el = document.getElementById('fundCodeError');
+      if (el && !el.textContent) el.textContent = err;
+    }
+  }
+}
+
+// ============================================================
+// Modal: Delete Confirm
+// ============================================================
+
+window._showDeleteConfirm = function(fundId) {
+  var fund = FundService.getFund(fundId);
+  if (!fund) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal" style="max-width:360px"><h2>确认删除</h2>' +
+    '<p style="margin-bottom:16px;color:#666">确定要删除基金「' + fund.name + '」吗？<br><span class="text-muted">该基金的所有涨跌记录和加减仓记录也将被删除，此操作不可撤销。</span></p>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-danger" id="confirmDeleteBtn">删除</button></div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    FundService.deleteFund(fundId);
+    overlay.remove();
+    showToast('基金已删除');
+    navigate('fundList');
+  });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+// ============================================================
+// Modal: Position (Buy/Sell)
+// ============================================================
+
+window._showPositionModal = function(fundId, type) {
+  var fund = FundService.getFund(fundId);
+  if (!fund) return;
+  var isBuy = type === 'buy';
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal" style="max-width:400px"><h2>' + (isBuy ? '加仓' : '减仓') + ' - ' + fund.name + '</h2>' +
+    (!isBuy ? '<p class="text-muted" style="margin-bottom:12px">当前持有 ' + fund.shares.toFixed(2) + ' 份</p>' : '') +
+    '<div class="form-group"><label>操作净值 *</label>' +
+    '<input type="number" id="posPrice" value="' + fund.currentPrice + '" step="0.0001" min="0"></div>' +
+    '<div class="form-group"><label>操作份额 *</label>' +
+    '<input type="number" id="posShares" step="0.01" min="0" placeholder="' + (isBuy ? '加仓份额' : '减仓份额') + '">' +
+    '<div id="posError" class="error-text"></div></div>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn ' + (isBuy ? 'btn-primary' : 'btn-warning') + '" id="posSubmitBtn">' + (isBuy ? '确认加仓' : '确认减仓') + '</button></div></div>';
+  document.body.appendChild(overlay);
+
+  document.getElementById('posSubmitBtn').addEventListener('click', function() {
+    var price = parseFloat(document.getElementById('posPrice').value);
+    var shares = parseFloat(document.getElementById('posShares').value);
+    document.getElementById('posError').textContent = '';
+
+    var result = RecordService.addPositionRecord(fundId, { type: type, price: price, shares: shares });
+    if (!result.success) {
+      document.getElementById('posError').textContent = result.errors.join('; ');
+      return;
+    }
+    overlay.remove();
+    showToast(isBuy ? '加仓成功' : '减仓成功');
+    navigate('fundDetail', { fundId: fundId, detailTab: 'positionRecords' });
+  });
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+// ============================================================
+// Settings Actions
+// ============================================================
+
+// Save target ratios
+window._saveRatios = function() {
+  var bond = parseFloat(document.getElementById('ratioBond').value) || 0;
+  var a_stock = parseFloat(document.getElementById('ratioAStock').value) || 0;
+  var global_stock = parseFloat(document.getElementById('ratioGlobal').value) || 0;
+
+  var errEl = document.getElementById('ratioError');
+  errEl.textContent = '';
+
+  var result = RatioService.setTargetRatios({ bond: bond, a_stock: a_stock, global_stock: global_stock });
+  if (!result.success) {
+    errEl.textContent = result.error;
+    return;
+  }
+  showToast('目标比例已保存');
+  render();
+};
+
+// Refresh all fund prices
+window._refreshAll = function() {
+  var btn = document.getElementById('refreshAllBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '刷新中...'; }
+
+  var funds = FundService.getAllFunds();
+  if (funds.length === 0) {
+    showToast('暂无基金可刷新');
+    if (btn) { btn.disabled = false; btn.textContent = '一键刷新所有净值'; }
+    return;
+  }
+
+  FundAPI.refreshAllNetValues(funds).then(function(results) {
+    var successCount = results.filter(function(r) { return r.success; }).length;
+    var failCount = results.filter(function(r) { return !r.success; }).length;
+
+    var resultEl = document.getElementById('refreshResult');
+    if (resultEl) {
+      var cls = failCount === 0 ? 'success' : 'partial';
+      resultEl.innerHTML = '<div class="refresh-result ' + cls + '">刷新完成：成功 ' + successCount + ' 只' + (failCount > 0 ? '，失败 ' + failCount + ' 只' : '') + '</div>';
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '一键刷新所有净值'; }
+    showToast('刷新完成: ' + successCount + '成功, ' + failCount + '失败');
+  });
+};
+
+// Refresh single fund price
+window._refreshFundPrice = function(fundId) {
+  var fund = FundService.getFund(fundId);
+  if (!fund) return;
+
+  showToast('正在获取最新净值...');
+  FundAPI.fetchFundInfo(fund.code).then(function(info) {
+    if (!info) {
+      showToast('获取净值失败');
+      return;
+    }
+
+    var oldPrice = fund.currentPrice;
+    var newPrice = info.netValue;
+
+    if (oldPrice !== newPrice) {
+      RecordService.addPriceChangeRecord(fundId, oldPrice, newPrice);
+      FundService.updateFund(fundId, { currentPrice: newPrice });
+      showToast('净值已更新: ' + oldPrice.toFixed(4) + ' → ' + newPrice.toFixed(4));
+    } else {
+      showToast('净值未变化');
+    }
+    render();
+  });
+};
+
+// Export data
+window._exportData = function() {
+  var json = StorageService.exportAll();
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'fund_manager_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出');
+};
+
+// Import data
+window._importData = function(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var json = e.target.result;
+    var data;
+    try { data = JSON.parse(json); } catch(err) {
+      showToast('文件格式不正确，无法解析 JSON');
+      return;
+    }
+    var validation = StorageService.validateImportData(data);
+    if (!validation.valid) {
+      showToast('文件格式错误: ' + validation.errors.join('; '));
+      return;
+    }
+    showImportModeModal(json);
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+};
+
+function showImportModeModal(json) {
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal" style="max-width:360px"><h2>导入模式</h2>' +
+    '<p style="margin-bottom:16px;color:#666">请选择导入方式：</p>' +
+    '<div class="form-actions" style="flex-direction:column;gap:8px">' +
+    '<button class="btn btn-primary btn-block" id="importOverwrite">覆盖现有数据</button>' +
+    '<button class="btn btn-secondary btn-block" id="importMerge">合并数据（保留现有）</button>' +
+    '<button class="btn btn-secondary btn-block" onclick="this.closest(\'.modal-overlay\').remove()">取消</button></div></div>';
+  document.body.appendChild(overlay);
+
+  document.getElementById('importOverwrite').addEventListener('click', function() {
+    var result = StorageService.importAll(json, 'overwrite');
+    overlay.remove();
+    if (result.success) { showToast('数据已覆盖导入'); render(); }
+    else showToast('导入失败: ' + result.error);
+  });
+
+  document.getElementById('importMerge').addEventListener('click', function() {
+    var result = StorageService.importAll(json, 'merge');
+    overlay.remove();
+    if (result.success) { showToast('数据已合并导入'); render(); }
+    else showToast('导入失败: ' + result.error);
+  });
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+}
+
+// Reset data
+window._resetData = function() {
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal" style="max-width:360px"><h2>⚠️ 重置数据</h2>' +
+    '<p style="margin-bottom:16px;color:#666">确定要重置所有数据吗？<br><span class="text-muted">所有基金、涨跌记录、加减仓记录和目标比例都将被清除，此操作不可撤销。</span></p>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-danger" id="confirmResetBtn">确认重置</button></div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('confirmResetBtn').addEventListener('click', function() {
+    StorageService.reset();
+    overlay.remove();
+    showToast('数据已重置');
+    navigate('dashboard');
+  });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+// ============================================================
+// Section I: Initialize
+// ============================================================
+
+render();
+
+</script>
+</body>
+</html>
