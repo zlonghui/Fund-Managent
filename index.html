@@ -82,6 +82,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .today-op-fund{font-size:14px;font-weight:500}
 .today-op-amount{font-size:14px;font-weight:600}
 .today-op-bottom{display:flex;justify-content:space-between;font-size:12px;color:#888}
+.dip-plan-item{padding:14px 16px}
+.dip-plan-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.dip-plan-fund{font-size:14px;font-weight:500}
+.dip-plan-meta{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:8px}
+.dip-plan-actions{display:flex;gap:6px}
 </style>
 </head>
 <body>
@@ -110,7 +115,8 @@ var STORAGE_KEYS = {
   PRICE_RECORDS: 'fund_manager_price_records',
   POSITION_RECORDS: 'fund_manager_position_records',
   TARGET_RATIOS: 'fund_manager_target_ratios',
-  CATEGORIES: 'fund_manager_categories'
+  CATEGORIES: 'fund_manager_categories',
+  DIP_PLANS: 'fund_manager_dip_plans'
 };
 
 var DEFAULT_CATEGORIES = [
@@ -287,6 +293,7 @@ var StorageService = (function() {
       positionRecords: load(STORAGE_KEYS.POSITION_RECORDS) || [],
       targetRatios: load(STORAGE_KEYS.TARGET_RATIOS) || {},
       categories: CategoryService.getCategories(),
+      dipPlans: load(STORAGE_KEYS.DIP_PLANS) || [],
       exportedAt: new Date().toISOString()
     };
     return JSON.stringify(data);
@@ -678,6 +685,141 @@ var RatioService = (function() {
 })();
 
 // ============================================================
+// Section G2: DipService (定投服务)
+// ============================================================
+
+var DipService = (function() {
+  var WEEK_DAY_LABELS = ['一','二','三','四','五','六','日'];
+
+  function getPlans() {
+    return StorageService.load(STORAGE_KEYS.DIP_PLANS) || [];
+  }
+
+  function savePlans(plans) {
+    StorageService.save(STORAGE_KEYS.DIP_PLANS, plans);
+  }
+
+  function addPlan(plan) {
+    var errors = validatePlan(plan);
+    if (errors.length > 0) return { success: false, errors: errors };
+    var newPlan = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      fundId: plan.fundId,
+      frequency: plan.frequency,
+      targetAmount: plan.targetAmount,
+      weekDay: plan.weekDay || 1,
+      monthDay: plan.monthDay || 1,
+      enabled: plan.enabled !== undefined ? plan.enabled : true,
+      createdAt: new Date().toISOString()
+    };
+    var plans = getPlans();
+    plans.push(newPlan);
+    savePlans(plans);
+    return { success: true, plan: newPlan };
+  }
+
+  function updatePlan(id, updates) {
+    var plans = getPlans();
+    var index = -1;
+    for (var i = 0; i < plans.length; i++) { if (plans[i].id === id) { index = i; break; } }
+    if (index === -1) return { success: false, errors: ['定投计划不存在'] };
+    var plan = plans[index];
+    var merged = {};
+    Object.keys(plan).forEach(function(k) { merged[k] = plan[k]; });
+    Object.keys(updates).forEach(function(k) { if (k !== 'id' && k !== 'createdAt') merged[k] = updates[k]; });
+    var errors = validatePlan(merged);
+    if (errors.length > 0) return { success: false, errors: errors };
+    plans[index] = merged;
+    savePlans(plans);
+    return { success: true, plan: merged };
+  }
+
+  function deletePlan(id) {
+    var plans = getPlans();
+    var index = -1;
+    for (var i = 0; i < plans.length; i++) { if (plans[i].id === id) { index = i; break; } }
+    if (index === -1) return { success: false, errors: ['定投计划不存在'] };
+    plans.splice(index, 1);
+    savePlans(plans);
+    return { success: true };
+  }
+
+  function validatePlan(plan) {
+    var errors = [];
+    if (!plan.fundId) errors.push('请选择基金');
+    if (!plan.frequency || ['daily','weekly','monthly'].indexOf(plan.frequency) === -1) errors.push('请选择定投频率');
+    if (!plan.targetAmount || typeof plan.targetAmount !== 'number' || plan.targetAmount <= 0) errors.push('目标金额必须为正数');
+    if (plan.frequency === 'weekly') {
+      var wd = Number(plan.weekDay);
+      if (!wd || wd < 1 || wd > 7) errors.push('请选择有效的星期几(1-7)');
+    }
+    if (plan.frequency === 'monthly') {
+      var md = Number(plan.monthDay);
+      if (!md || md < 1 || md > 28) errors.push('请选择有效的日期(1-28)');
+    }
+    return errors;
+  }
+
+  function getPlanStatus(plan) {
+    var posRecords = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+    var fundRecords = posRecords.filter(function(r) { return r.fundId === plan.fundId && r.type === 'buy'; });
+    var now = new Date();
+    var periodRecords = [];
+
+    if (plan.frequency === 'daily') {
+      var todayStr = now.toISOString().slice(0, 10);
+      periodRecords = fundRecords.filter(function(r) { return r.date && r.date.slice(0, 10) === todayStr; });
+    } else if (plan.frequency === 'weekly') {
+      // Get Monday of current week
+      var day = now.getDay(); // 0=Sun, 1=Mon...
+      var diffToMon = (day === 0) ? 6 : (day - 1);
+      var monday = new Date(now);
+      monday.setHours(0, 0, 0, 0);
+      monday.setDate(monday.getDate() - diffToMon);
+      var sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      periodRecords = fundRecords.filter(function(r) {
+        if (!r.date) return false;
+        var rd = new Date(r.date);
+        return rd >= monday && rd <= sunday;
+      });
+    } else if (plan.frequency === 'monthly') {
+      var monthStr = now.toISOString().slice(0, 7); // YYYY-MM
+      periodRecords = fundRecords.filter(function(r) { return r.date && r.date.slice(0, 7) === monthStr; });
+    }
+
+    var investedAmount = periodRecords.reduce(function(sum, r) { return sum + (r.amount || 0); }, 0);
+    var remaining = Math.max(0, plan.targetAmount - investedAmount);
+    var completed = investedAmount >= plan.targetAmount;
+
+    return { completed: completed, investedAmount: investedAmount, remaining: remaining };
+  }
+
+  function getFrequencyLabel(plan) {
+    if (plan.frequency === 'daily') return '每日';
+    if (plan.frequency === 'weekly') return '每周' + WEEK_DAY_LABELS[(plan.weekDay || 1) - 1];
+    if (plan.frequency === 'monthly') return '每月' + (plan.monthDay || 1) + '号';
+    return '';
+  }
+
+  function getPlansByFund(fundId) {
+    var plans = getPlans();
+    return plans.filter(function(p) { return p.fundId === fundId; });
+  }
+
+  return {
+    getPlans: getPlans,
+    addPlan: addPlan,
+    updatePlan: updatePlan,
+    deletePlan: deletePlan,
+    getPlanStatus: getPlanStatus,
+    getFrequencyLabel: getFrequencyLabel,
+    getPlansByFund: getPlansByFund
+  };
+})();
+
+// ============================================================
 // Section H: FundAPI (JSONP)
 // ============================================================
 
@@ -795,10 +937,11 @@ function render() {
   var header = $('#appHeader');
   var tabBar = $('#tabBar');
 
-  if (['dashboard', 'today', 'fundList', 'settings'].indexOf(currentView) !== -1) {
+  if (['dashboard', 'today', 'dip', 'fundList', 'settings'].indexOf(currentView) !== -1) {
     tabBar.innerHTML =
       '<button class="tab-item ' + (currentView === 'dashboard' ? 'active' : '') + '" onclick="window._nav(\'dashboard\')"><span class="tab-icon">📊</span>仪表盘</button>' +
       '<button class="tab-item ' + (currentView === 'today' ? 'active' : '') + '" onclick="window._nav(\'today\')"><span class="tab-icon">📅</span>今日</button>' +
+      '<button class="tab-item ' + (currentView === 'dip' ? 'active' : '') + '" onclick="window._nav(\'dip\')"><span class="tab-icon">💰</span>定投</button>' +
       '<button class="tab-item ' + (currentView === 'fundList' ? 'active' : '') + '" onclick="window._nav(\'fundList\')"><span class="tab-icon">📋</span>基金列表</button>' +
       '<button class="tab-item ' + (currentView === 'settings' ? 'active' : '') + '" onclick="window._nav(\'settings\')"><span class="tab-icon">⚙️</span>设置</button>';
     tabBar.style.display = 'flex';
@@ -809,6 +952,7 @@ function render() {
   switch (currentView) {
     case 'dashboard': renderDashboard(main, header); break;
     case 'today': renderToday(main, header); break;
+    case 'dip': renderDip(main, header); break;
     case 'fundList': renderFundList(main, header); break;
     case 'fundDetail': renderFundDetail(main, header); break;
     case 'settings': renderSettings(main, header); break;
@@ -958,6 +1102,221 @@ function renderToday(main, header) {
 }
 
 // ============================================================
+// Section L2: DIP View (定投计划)
+// ============================================================
+
+function renderDip(main, header) {
+  header.innerHTML = '<span>定投计划</span><button style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer" onclick="window._showDipPlanModal()">+ 新建计划</button>';
+
+  var plans = DipService.getPlans();
+  var enabledPlans = plans.filter(function(p) { return p.enabled; });
+
+  if (enabledPlans.length === 0 && plans.length === 0) {
+    main.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><p>暂无定投计划，点击右上角添加</p></div>';
+    return;
+  }
+
+  var funds = FundService.getAllFunds();
+  var fundMap = {};
+  funds.forEach(function(f) { fundMap[f.id] = f; });
+
+  var pending = [];
+  var completed = [];
+
+  enabledPlans.forEach(function(plan) {
+    var status = DipService.getPlanStatus(plan);
+    var item = { plan: plan, status: status, fund: fundMap[plan.fundId] };
+    if (status.completed) completed.push(item);
+    else pending.push(item);
+  });
+
+  var disabledPlans = plans.filter(function(p) { return !p.enabled; });
+
+  var html = '';
+
+  // Pending section
+  if (pending.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#333">⏳ 待完成</div>';
+    for (var i = 0; i < pending.length; i++) {
+      html += renderDipPlanItem(pending[i]);
+    }
+  }
+
+  // Completed section
+  if (completed.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;margin:16px 0 8px;color:#333">✅ 已完成</div>';
+    for (var j = 0; j < completed.length; j++) {
+      html += renderDipPlanItem(completed[j]);
+    }
+  }
+
+  // Disabled plans
+  if (disabledPlans.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;margin:16px 0 8px;color:#999">⏸️ 已暂停</div>';
+    for (var k = 0; k < disabledPlans.length; k++) {
+      var dp = disabledPlans[k];
+      var fund = fundMap[dp.fundId];
+      html += '<div class="card dip-plan-item" style="opacity:0.6">' +
+        '<div class="dip-plan-top"><span class="dip-plan-fund">' + (fund ? fund.name : '未知基金') + ' <span class="text-muted">' + (fund ? fund.code : '') + '</span></span>' +
+        '<span class="text-muted" style="font-size:12px">已暂停</span></div>' +
+        '<div class="dip-plan-meta"><span>' + DipService.getFrequencyLabel(dp) + '</span><span>目标 ¥' + dp.targetAmount.toFixed(2) + '</span></div>' +
+        '<div class="dip-plan-actions">' +
+        '<button class="btn btn-sm btn-secondary" onclick="window._editDipPlan(\'' + dp.id + '\')">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="window._deleteDipPlan(\'' + dp.id + '\')">删除</button></div></div>';
+    }
+  }
+
+  if (enabledPlans.length === 0 && disabledPlans.length > 0) {
+    html = '<div class="empty-state" style="padding:20px"><p>所有计划已暂停</p></div>' + html;
+  }
+
+  main.innerHTML = html;
+}
+
+function renderDipPlanItem(item) {
+  var plan = item.plan;
+  var status = item.status;
+  var fund = item.fund;
+  var fundName = fund ? fund.name : '未知基金';
+  var fundCode = fund ? fund.code : '';
+
+  var statusHtml = '';
+  if (status.completed) {
+    statusHtml = '<span style="color:#27ae60;font-size:13px;font-weight:500">✅ 已完成 ¥' + status.investedAmount.toFixed(2) + '</span>';
+  } else if (status.investedAmount > 0) {
+    statusHtml = '<span style="color:#f39c12;font-size:13px;font-weight:500">⚠️ 还差 ¥' + status.remaining.toFixed(2) + '</span>';
+  } else {
+    statusHtml = '<span style="color:#4a90d9;font-size:13px;font-weight:500">⏳ 待投 ¥' + plan.targetAmount.toFixed(2) + '</span>';
+  }
+
+  return '<div class="card dip-plan-item">' +
+    '<div class="dip-plan-top"><span class="dip-plan-fund">' + fundName + ' <span class="text-muted">' + fundCode + '</span></span>' +
+    statusHtml + '</div>' +
+    '<div class="dip-plan-meta"><span>' + DipService.getFrequencyLabel(plan) + '</span><span>目标 ¥' + plan.targetAmount.toFixed(2) + '</span></div>' +
+    '<div class="dip-plan-actions">' +
+    (fund && !status.completed ? '<button class="btn btn-sm btn-primary" onclick="window._showPositionModal(\'' + plan.fundId + '\',\'buy\')">去加仓</button>' : '') +
+    '<button class="btn btn-sm btn-secondary" onclick="window._editDipPlan(\'' + plan.id + '\')">编辑</button>' +
+    '<button class="btn btn-sm btn-danger" onclick="window._deleteDipPlan(\'' + plan.id + '\')">删除</button></div></div>';
+}
+
+// ============================================================
+// Section L3: DIP Plan Modal (新建/编辑定投计划)
+// ============================================================
+
+window._showDipPlanModal = function(planId) {
+  var plan = null;
+  if (planId) {
+    var plans = DipService.getPlans();
+    for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { plan = plans[i]; break; } }
+  }
+  var isEdit = !!plan;
+  var funds = FundService.getAllFunds();
+
+  var fundOptions = '<option value="">请选择基金</option>';
+  for (var j = 0; j < funds.length; j++) {
+    var selected = (plan && plan.fundId === funds[j].id) ? ' selected' : '';
+    fundOptions += '<option value="' + funds[j].id + '"' + selected + '>' + funds[j].name + ' (' + funds[j].code + ')</option>';
+  }
+
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal" style="max-width:420px"><h2>' + (isEdit ? '编辑定投计划' : '新建定投计划') + '</h2>' +
+    '<div class="form-group"><label>选择基金 *</label><select id="dipFundId">' + fundOptions + '</select></div>' +
+    '<div class="form-group"><label>定投频率 *</label><select id="dipFrequency">' +
+    '<option value="daily"' + (plan && plan.frequency === 'daily' ? ' selected' : '') + '>每日</option>' +
+    '<option value="weekly"' + (plan && plan.frequency === 'weekly' ? ' selected' : '') + '>每周</option>' +
+    '<option value="monthly"' + (plan && plan.frequency === 'monthly' ? ' selected' : '') + '>每月</option></select></div>' +
+    '<div class="form-group" id="dipWeekDayGroup" style="display:none"><label>选择星期几 *</label><select id="dipWeekDay">' +
+    '<option value="1"' + (plan && plan.weekDay === 1 ? ' selected' : '') + '>周一</option>' +
+    '<option value="2"' + (plan && plan.weekDay === 2 ? ' selected' : '') + '>周二</option>' +
+    '<option value="3"' + (plan && plan.weekDay === 3 ? ' selected' : '') + '>周三</option>' +
+    '<option value="4"' + (plan && plan.weekDay === 4 ? ' selected' : '') + '>周四</option>' +
+    '<option value="5"' + (plan && plan.weekDay === 5 ? ' selected' : '') + '>周五</option>' +
+    '<option value="6"' + (plan && plan.weekDay === 6 ? ' selected' : '') + '>周六</option>' +
+    '<option value="7"' + (plan && plan.weekDay === 7 ? ' selected' : '') + '>周日</option></select></div>' +
+    '<div class="form-group" id="dipMonthDayGroup" style="display:none"><label>选择日期 (1-28) *</label>' +
+    '<input type="number" id="dipMonthDay" min="1" max="28" value="' + (plan ? plan.monthDay || 1 : 1) + '"></div>' +
+    '<div class="form-group"><label>目标金额 (元) *</label>' +
+    '<input type="number" id="dipTargetAmount" step="0.01" min="0" value="' + (plan ? plan.targetAmount : '') + '" placeholder="每期定投目标金额"></div>' +
+    '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="dipEnabled"' + (!plan || plan.enabled ? ' checked' : '') + ' style="width:auto"> 启用计划</label></div>' +
+    '<div id="dipError" class="error-text" style="margin-bottom:8px"></div>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-primary" id="dipSubmitBtn">' + (isEdit ? '保存' : '创建') + '</button></div></div>';
+
+  document.body.appendChild(overlay);
+
+  // Show/hide weekDay/monthDay based on frequency
+  var freqSelect = document.getElementById('dipFrequency');
+  function updateFreqFields() {
+    var freq = freqSelect.value;
+    document.getElementById('dipWeekDayGroup').style.display = freq === 'weekly' ? 'block' : 'none';
+    document.getElementById('dipMonthDayGroup').style.display = freq === 'monthly' ? 'block' : 'none';
+  }
+  freqSelect.addEventListener('change', updateFreqFields);
+  updateFreqFields();
+
+  // Submit
+  document.getElementById('dipSubmitBtn').addEventListener('click', function() {
+    var errEl = document.getElementById('dipError');
+    errEl.textContent = '';
+    var fundId = document.getElementById('dipFundId').value;
+    var frequency = document.getElementById('dipFrequency').value;
+    var weekDay = parseInt(document.getElementById('dipWeekDay').value) || 1;
+    var monthDay = parseInt(document.getElementById('dipMonthDay').value) || 1;
+    var targetAmount = parseFloat(document.getElementById('dipTargetAmount').value);
+    var enabled = document.getElementById('dipEnabled').checked;
+
+    var planData = {
+      fundId: fundId,
+      frequency: frequency,
+      weekDay: weekDay,
+      monthDay: monthDay,
+      targetAmount: targetAmount,
+      enabled: enabled
+    };
+
+    var result;
+    if (isEdit) {
+      result = DipService.updatePlan(plan.id, planData);
+    } else {
+      result = DipService.addPlan(planData);
+    }
+
+    if (!result.success) {
+      errEl.textContent = result.errors.join('; ');
+      return;
+    }
+
+    overlay.remove();
+    showToast(isEdit ? '定投计划已更新' : '定投计划已创建');
+    navigate('dip');
+  });
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+window._editDipPlan = function(planId) {
+  window._showDipPlanModal(planId);
+};
+
+window._deleteDipPlan = function(planId) {
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal" style="max-width:360px"><h2>删除定投计划</h2>' +
+    '<p style="margin-bottom:16px;color:#666">确定要删除该定投计划吗？</p>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-danger" id="confirmDelDipBtn">删除</button></div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('confirmDelDipBtn').addEventListener('click', function() {
+    DipService.deletePlan(planId);
+    overlay.remove();
+    showToast('定投计划已删除');
+    navigate('dip');
+  });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+// ============================================================
 // Section M: Fund List View
 // ============================================================
 
@@ -1033,7 +1392,16 @@ function renderFundDetail(main, header) {
 
 function renderDetailInfo(fund) {
   var catName = CategoryService.getCategoryName(fund.category);
-  return '<div class="card">' +
+  var dipPlans = DipService.getPlansByFund(fund.id);
+  var dipIndicator = '';
+  if (dipPlans.length > 0) {
+    var activePlan = null;
+    for (var i = 0; i < dipPlans.length; i++) { if (dipPlans[i].enabled) { activePlan = dipPlans[i]; break; } }
+    if (activePlan) {
+      dipIndicator = '<div style="margin-bottom:12px;padding:8px 12px;background:#eef6ff;border-radius:6px;font-size:13px;color:#4a90d9">📌 ' + DipService.getFrequencyLabel(activePlan) + '定投 ¥' + activePlan.targetAmount.toFixed(0) + '</div>';
+    }
+  }
+  return '<div class="card">' + dipIndicator +
     '<div class="detail-row"><span class="label">基金代码</span><span class="value">' + fund.code + '</span></div>' +
     '<div class="detail-row"><span class="label">基金名称</span><span class="value">' + fund.name + '</span></div>' +
     '<div class="detail-row"><span class="label">分类</span><span class="value">' + catName + '</span></div>' +
