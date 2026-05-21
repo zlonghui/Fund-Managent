@@ -87,6 +87,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .dip-plan-fund{font-size:14px;font-weight:500}
 .dip-plan-meta{display:flex;justify-content:space-between;font-size:12px;color:#888;margin-bottom:8px}
 .dip-plan-actions{display:flex;gap:6px}
+.date-group-header{font-size:13px;font-weight:600;color:#4a90d9;padding:8px 0 4px;border-bottom:1px solid #e0e0e0;margin-top:8px;margin-bottom:4px}
+.search-input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;margin-bottom:12px;transition:border-color 0.2s}
+.search-input:focus{border-color:#4a90d9}
+.signal-light{display:inline-block;margin-right:6px}
+.sector-item{padding:14px;border-bottom:1px solid #f0f0f0}
+.sector-item:last-child{border-bottom:none}
+.sector-top{display:flex;align-items:center;margin-bottom:6px}
+.sector-name{font-size:15px;font-weight:500;flex:1}
+.sector-judgment{font-size:12px;color:#888;margin-left:8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sector-funds{font-size:12px;color:#888;margin-bottom:6px}
+.sector-actions{display:flex;gap:6px}
+.history-note-item{padding:12px 0;border-bottom:1px solid #f5f5f5}
+.history-note-date{font-size:12px;color:#888;margin-bottom:4px}
+.history-note-action{font-size:13px;font-weight:500;margin-bottom:4px}
+.history-note-reason{font-size:13px;color:#555}
 </style>
 </head>
 <body>
@@ -116,7 +131,8 @@ var STORAGE_KEYS = {
   POSITION_RECORDS: 'fund_manager_position_records',
   TARGET_RATIOS: 'fund_manager_target_ratios',
   CATEGORIES: 'fund_manager_categories',
-  DIP_PLANS: 'fund_manager_dip_plans'
+  DIP_PLANS: 'fund_manager_dip_plans',
+  SECTOR_NOTES: 'fund_manager_sector_notes'
 };
 
 var DEFAULT_CATEGORIES = [
@@ -294,6 +310,7 @@ var StorageService = (function() {
       targetRatios: load(STORAGE_KEYS.TARGET_RATIOS) || {},
       categories: CategoryService.getCategories(),
       dipPlans: load(STORAGE_KEYS.DIP_PLANS) || [],
+      sectorNotes: load(STORAGE_KEYS.SECTOR_NOTES) || [],
       exportedAt: new Date().toISOString()
     };
     return JSON.stringify(data);
@@ -328,6 +345,12 @@ var StorageService = (function() {
       if (Array.isArray(data.categories) && data.categories.length > 0) {
         CategoryService.saveCategories(data.categories);
       }
+      if (Array.isArray(data.dipPlans)) {
+        save(STORAGE_KEYS.DIP_PLANS, data.dipPlans);
+      }
+      if (Array.isArray(data.sectorNotes)) {
+        save(STORAGE_KEYS.SECTOR_NOTES, data.sectorNotes);
+      }
     } else if (mode === 'merge') {
       var existingFunds = load(STORAGE_KEYS.FUNDS) || [];
       var existingPR = load(STORAGE_KEYS.PRICE_RECORDS) || [];
@@ -349,6 +372,22 @@ var StorageService = (function() {
       Object.keys(data.targetRatios).forEach(function(k) { merged[k] = data.targetRatios[k]; });
       Object.keys(existingTR).forEach(function(k) { merged[k] = existingTR[k]; });
       save(STORAGE_KEYS.TARGET_RATIOS, merged);
+      // Merge dipPlans
+      if (Array.isArray(data.dipPlans)) {
+        var existingDipPlans = load(STORAGE_KEYS.DIP_PLANS) || [];
+        var existingDipIds = {};
+        existingDipPlans.forEach(function(p) { existingDipIds[p.id] = true; });
+        var newDipPlans = data.dipPlans.filter(function(p) { return !existingDipIds[p.id]; });
+        save(STORAGE_KEYS.DIP_PLANS, existingDipPlans.concat(newDipPlans));
+      }
+      // Merge sectorNotes
+      if (Array.isArray(data.sectorNotes)) {
+        var existingSectorNotes = load(STORAGE_KEYS.SECTOR_NOTES) || [];
+        var existingSectorNoteIds = {};
+        existingSectorNotes.forEach(function(n) { existingSectorNoteIds[n.id] = true; });
+        var newSectorNotes = data.sectorNotes.filter(function(n) { return !existingSectorNoteIds[n.id]; });
+        save(STORAGE_KEYS.SECTOR_NOTES, existingSectorNotes.concat(newSectorNotes));
+      }
     } else {
       return { success: false, error: '无效的导入模式' };
     }
@@ -643,14 +682,12 @@ var RatioService = (function() {
     var stored = StorageService.load(STORAGE_KEYS.TARGET_RATIOS);
     var categories = CategoryService.getCategories();
     if (stored && typeof stored === 'object') {
-      // Ensure all current categories have a value
       var complete = true;
       for (var i = 0; i < categories.length; i++) {
         if (stored[categories[i].id] === undefined) { complete = false; break; }
       }
       if (complete && validateRatioSum(stored)) return stored;
     }
-    // Return default: evenly distributed
     var defaultRatios = {};
     var perCat = Math.floor(100 / categories.length);
     var remainder = 100 - perCat * categories.length;
@@ -770,8 +807,7 @@ var DipService = (function() {
       var todayStr = now.toISOString().slice(0, 10);
       periodRecords = fundRecords.filter(function(r) { return r.date && r.date.slice(0, 10) === todayStr; });
     } else if (plan.frequency === 'weekly') {
-      // Get Monday of current week
-      var day = now.getDay(); // 0=Sun, 1=Mon...
+      var day = now.getDay();
       var diffToMon = (day === 0) ? 6 : (day - 1);
       var monday = new Date(now);
       monday.setHours(0, 0, 0, 0);
@@ -785,7 +821,7 @@ var DipService = (function() {
         return rd >= monday && rd <= sunday;
       });
     } else if (plan.frequency === 'monthly') {
-      var monthStr = now.toISOString().slice(0, 7); // YYYY-MM
+      var monthStr = now.toISOString().slice(0, 7);
       periodRecords = fundRecords.filter(function(r) { return r.date && r.date.slice(0, 7) === monthStr; });
     }
 
@@ -816,6 +852,124 @@ var DipService = (function() {
     getPlanStatus: getPlanStatus,
     getFrequencyLabel: getFrequencyLabel,
     getPlansByFund: getPlansByFund
+  };
+})();
+
+// ============================================================
+// Section G3: SectorAnalysisService (板块分析服务)
+// ============================================================
+
+var SectorAnalysisService = (function() {
+  function getNotes() {
+    return StorageService.load(STORAGE_KEYS.SECTOR_NOTES) || [];
+  }
+
+  function saveNotes(notes) {
+    StorageService.save(STORAGE_KEYS.SECTOR_NOTES, notes);
+  }
+
+  function addNote(note) {
+    if (!note || typeof note !== 'object') return { success: false, error: '无效的记录数据' };
+    if (!note.sector || typeof note.sector !== 'string' || note.sector.trim() === '') {
+      return { success: false, error: '板块名称不能为空' };
+    }
+    if (!note.action || ['buy', 'sell', 'hold'].indexOf(note.action) === -1) {
+      return { success: false, error: '操作判断不能为空' };
+    }
+    var newNote = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      sector: note.sector.trim(),
+      date: note.date || getTodayStr(),
+      action: note.action,
+      reason: (note.reason || '').trim(),
+      createdAt: new Date().toISOString()
+    };
+    var notes = getNotes();
+    notes.push(newNote);
+    saveNotes(notes);
+    return { success: true, note: newNote };
+  }
+
+  function deleteNote(id) {
+    var notes = getNotes();
+    var index = -1;
+    for (var i = 0; i < notes.length; i++) { if (notes[i].id === id) { index = i; break; } }
+    if (index === -1) return { success: false, error: '记录不存在' };
+    notes.splice(index, 1);
+    saveNotes(notes);
+    return { success: true };
+  }
+
+  function getTodayNotes() {
+    var today = getTodayStr();
+    var notes = getNotes();
+    return notes.filter(function(n) { return n.date === today; });
+  }
+
+  function getNotesBySector(sector) {
+    var notes = getNotes();
+    return notes.filter(function(n) { return n.sector === sector; }).sort(function(a, b) {
+      return b.date > a.date ? 1 : b.date < a.date ? -1 : 0;
+    });
+  }
+
+  function getActiveSectors() {
+    var funds = FundService.getAllFunds();
+    var sectors = {};
+    for (var i = 0; i < funds.length; i++) {
+      if (funds[i].sector && funds[i].sector.trim() !== '') {
+        sectors[funds[i].sector.trim()] = true;
+      }
+    }
+    return Object.keys(sectors);
+  }
+
+  function getSectorHeat() {
+    var sectors = getActiveSectors();
+    var notes = getNotes();
+    var now = new Date();
+    var sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    var sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+    var heatMap = {};
+    for (var i = 0; i < sectors.length; i++) {
+      heatMap[sectors[i]] = 0;
+    }
+    for (var j = 0; j < notes.length; j++) {
+      var n = notes[j];
+      if (n.date >= sevenDaysAgoStr && heatMap[n.sector] !== undefined) {
+        heatMap[n.sector]++;
+      }
+    }
+
+    sectors.sort(function(a, b) {
+      var heatA = heatMap[a] || 0;
+      var heatB = heatMap[b] || 0;
+      if (heatB !== heatA) return heatB - heatA;
+      return a.localeCompare(b);
+    });
+
+    return sectors.map(function(s) { return { sector: s, heat: heatMap[s] || 0 }; });
+  }
+
+  function getTodayNoteForSector(sector) {
+    var today = getTodayStr();
+    var notes = getNotes();
+    for (var i = 0; i < notes.length; i++) {
+      if (notes[i].sector === sector && notes[i].date === today) return notes[i];
+    }
+    return null;
+  }
+
+  return {
+    getNotes: getNotes,
+    addNote: addNote,
+    deleteNote: deleteNote,
+    getTodayNotes: getTodayNotes,
+    getNotesBySector: getNotesBySector,
+    getActiveSectors: getActiveSectors,
+    getSectorHeat: getSectorHeat,
+    getTodayNoteForSector: getTodayNoteForSector
   };
 })();
 
@@ -895,6 +1049,9 @@ var FundAPI = (function() {
 var currentView = 'dashboard';
 var currentFundId = null;
 var detailTab = 'info';
+var fundSearchTerm = '';
+var positionReturnView = null;
+var currentSector = null;
 
 function $(sel) { return document.querySelector(sel); }
 function formatMoney(n) { return n >= 0 ? '¥' + n.toFixed(2) : '-¥' + Math.abs(n).toFixed(2); }
@@ -908,6 +1065,17 @@ function formatDate(iso) {
   if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
   if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
   return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+}
+function formatDateGroupHeader(dateStr) {
+  var today = new Date();
+  var todayStr = today.toISOString().slice(0, 10);
+  var yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  var yesterdayStr = yesterday.toISOString().slice(0, 10);
+  if (dateStr === todayStr) return '今天';
+  if (dateStr === yesterdayStr) return '昨天';
+  var parts = dateStr.split('-');
+  return parts[0] + '年' + parseInt(parts[1]) + '月' + parseInt(parts[2]) + '日';
 }
 function profitClass(n) { return n > 0 ? 'text-profit' : n < 0 ? 'text-loss' : ''; }
 function getTodayStr() { return new Date().toISOString().slice(0, 10); }
@@ -929,7 +1097,7 @@ function navigate(view, opts) {
 window._nav = navigate;
 
 // ============================================================
-// Section J: Render Entry & Tab Bar
+// Section J: Render Entry & Tab Bar (4 tabs - merged 今日 into dashboard)
 // ============================================================
 
 function render() {
@@ -937,11 +1105,12 @@ function render() {
   var header = $('#appHeader');
   var tabBar = $('#tabBar');
 
-  if (['dashboard', 'today', 'dip', 'fundList', 'settings'].indexOf(currentView) !== -1) {
+  var tabViews = ['dashboard', 'dip', 'analysis', 'fundList', 'settings', 'today', 'sectorHistory'];
+  if (tabViews.indexOf(currentView) !== -1) {
     tabBar.innerHTML =
       '<button class="tab-item ' + (currentView === 'dashboard' ? 'active' : '') + '" onclick="window._nav(\'dashboard\')"><span class="tab-icon">📊</span>仪表盘</button>' +
-      '<button class="tab-item ' + (currentView === 'today' ? 'active' : '') + '" onclick="window._nav(\'today\')"><span class="tab-icon">📅</span>今日</button>' +
       '<button class="tab-item ' + (currentView === 'dip' ? 'active' : '') + '" onclick="window._nav(\'dip\')"><span class="tab-icon">💰</span>定投</button>' +
+      '<button class="tab-item ' + ((currentView === 'analysis' || currentView === 'sectorHistory') ? 'active' : '') + '" onclick="window._nav(\'analysis\')"><span class="tab-icon">🎯</span>分析</button>' +
       '<button class="tab-item ' + (currentView === 'fundList' ? 'active' : '') + '" onclick="window._nav(\'fundList\')"><span class="tab-icon">📋</span>基金列表</button>' +
       '<button class="tab-item ' + (currentView === 'settings' ? 'active' : '') + '" onclick="window._nav(\'settings\')"><span class="tab-icon">⚙️</span>设置</button>';
     tabBar.style.display = 'flex';
@@ -953,6 +1122,8 @@ function render() {
     case 'dashboard': renderDashboard(main, header); break;
     case 'today': renderToday(main, header); break;
     case 'dip': renderDip(main, header); break;
+    case 'analysis': renderAnalysis(main, header); break;
+    case 'sectorHistory': renderSectorHistory(main, header); break;
     case 'fundList': renderFundList(main, header); break;
     case 'fundDetail': renderFundDetail(main, header); break;
     case 'settings': renderSettings(main, header); break;
@@ -960,7 +1131,7 @@ function render() {
 }
 
 // ============================================================
-// Section K: Dashboard View
+// Section K: Dashboard View (with refresh button and today summary)
 // ============================================================
 
 function renderDashboard(main, header) {
@@ -987,6 +1158,10 @@ function renderDashboard(main, header) {
     '<div><div style="opacity:0.8">收益率</div><div style="font-size:14px;font-weight:600">' + formatRate(totalProfitRate) + '</div></div>' +
     '<div><div style="opacity:0.8">今日收益</div><div style="font-size:14px;font-weight:600">' + formatMoney(todayProfit) + '</div></div>' +
     '</div></div>';
+
+  // Refresh button
+  html += '<div style="margin-bottom:12px;text-align:right">' +
+    '<button class="btn btn-sm btn-secondary" id="dashRefreshBtn" onclick="window._dashboardRefresh()" style="font-size:12px;padding:5px 10px">🔄 刷新所有净值</button></div>';
 
   html += '<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">分类持有占比</div>';
   if (categoryRatios.length === 0) {
@@ -1017,15 +1192,65 @@ function renderDashboard(main, header) {
   }
   html += '</div>';
 
+  // Today operations summary section
+  html += renderTodaySummaryCard(funds);
+
   main.innerHTML = html;
 }
 
+// Dashboard refresh handler
+window._dashboardRefresh = function() {
+  var btn = document.getElementById('dashRefreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 刷新中...'; }
+  var funds = FundService.getAllFunds();
+  if (funds.length === 0) {
+    showToast('暂无基金可刷新');
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 刷新所有净值'; }
+    return;
+  }
+  FundAPI.refreshAllNetValues(funds).then(function(results) {
+    var successCount = results.filter(function(r) { return r.success; }).length;
+    var failCount = results.filter(function(r) { return !r.success; }).length;
+    showToast('刷新完成: ' + successCount + '成功, ' + failCount + '失败');
+    render();
+  });
+};
+
+// Today summary card for dashboard
+function renderTodaySummaryCard(funds) {
+  var today = getTodayStr();
+  var allPosRecords = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+  var allPriceRecords = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
+  var todayPosRecords = allPosRecords.filter(function(r) { return r.date && r.date.slice(0, 10) === today; });
+  var todayPriceRecords = allPriceRecords.filter(function(r) { return r.date && r.date.slice(0, 10) === today; });
+
+  if (todayPosRecords.length === 0 && todayPriceRecords.length === 0) {
+    return '';
+  }
+
+  var totalBought = 0, totalSold = 0;
+  todayPosRecords.forEach(function(r) {
+    if (r.type === 'buy') totalBought += r.amount;
+    else totalSold += r.amount;
+  });
+
+  var html = '<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:10px">📅 今日操作</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:10px">';
+  if (totalBought > 0) html += '<div><span style="color:#888">买入: </span><span class="text-profit">' + formatMoney(totalBought) + '</span></div>';
+  if (totalSold > 0) html += '<div><span style="color:#888">卖出: </span><span class="text-loss">' + formatMoney(totalSold) + '</span></div>';
+  if (todayPriceRecords.length > 0) html += '<div><span style="color:#888">净值变动: </span><span>' + todayPriceRecords.length + '条</span></div>';
+  html += '</div>';
+  html += '<button class="btn btn-sm btn-secondary" onclick="window._nav(\'today\')" style="width:100%">查看详情</button>';
+  html += '</div>';
+  return html;
+}
+
 // ============================================================
-// Section L: Today View (今日操作)
+// Section L: Today View (今日操作 - accessible via dashboard link)
 // ============================================================
 
 function renderToday(main, header) {
-  header.innerHTML = '<span>今日操作</span>';
+  header.innerHTML = '<button class="back-btn" onclick="window._nav(\'dashboard\')">←</button><span>今日操作</span>';
   var funds = FundService.getAllFunds();
   var today = getTodayStr();
   var allPriceRecords = StorageService.load(STORAGE_KEYS.PRICE_RECORDS) || [];
@@ -1039,7 +1264,6 @@ function renderToday(main, header) {
     return;
   }
 
-  // Group by fund
   var fundMap = {};
   funds.forEach(function(f) { fundMap[f.id] = f; });
 
@@ -1102,7 +1326,7 @@ function renderToday(main, header) {
 }
 
 // ============================================================
-// Section L2: DIP View (定投计划)
+// Section L2: DIP View (定投计划) with statistics card
 // ============================================================
 
 function renderDip(main, header) {
@@ -1132,7 +1356,8 @@ function renderDip(main, header) {
 
   var disabledPlans = plans.filter(function(p) { return !p.enabled; });
 
-  var html = '';
+  // DIP Statistics Card
+  var html = renderDipStatistics(enabledPlans, fundMap);
 
   // Pending section
   if (pending.length > 0) {
@@ -1173,6 +1398,50 @@ function renderDip(main, header) {
   main.innerHTML = html;
 }
 
+function renderDipStatistics(enabledPlans, fundMap) {
+  if (enabledPlans.length === 0) return '';
+
+  var now = new Date();
+  var monthStr = now.toISOString().slice(0, 7);
+  var posRecords = StorageService.load(STORAGE_KEYS.POSITION_RECORDS) || [];
+
+  // 本月总定投金额: sum of all buy records this month for funds that have DIP plans
+  var dipFundIds = {};
+  enabledPlans.forEach(function(p) { dipFundIds[p.fundId] = true; });
+  var monthBuyRecords = posRecords.filter(function(r) {
+    return r.type === 'buy' && r.date && r.date.slice(0, 7) === monthStr && dipFundIds[r.fundId];
+  });
+  var monthTotalInvested = monthBuyRecords.reduce(function(sum, r) { return sum + (r.amount || 0); }, 0);
+
+  // 本月计划总额: sum of all enabled plans' targetAmount × frequency factor
+  // daily × workdays remaining estimate (approx 22 workdays/month), weekly × 4, monthly × 1
+  var monthPlanTotal = 0;
+  enabledPlans.forEach(function(plan) {
+    var factor = 1;
+    if (plan.frequency === 'daily') factor = 22;
+    else if (plan.frequency === 'weekly') factor = 4;
+    else factor = 1;
+    monthPlanTotal += plan.targetAmount * factor;
+  });
+
+  // 完成率: completed plans / total enabled plans
+  var completedCount = 0;
+  enabledPlans.forEach(function(plan) {
+    var status = DipService.getPlanStatus(plan);
+    if (status.completed) completedCount++;
+  });
+  var completionRate = enabledPlans.length > 0 ? (completedCount / enabledPlans.length * 100) : 0;
+
+  var html = '<div class="card" style="background:linear-gradient(135deg,#4a90d9,#357abd);color:#fff;border:none;margin-bottom:16px">' +
+    '<div style="font-size:13px;opacity:0.9;margin-bottom:8px">📊 本月定投统计</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">' +
+    '<div><div style="opacity:0.8">已投金额</div><div style="font-size:14px;font-weight:600">¥' + monthTotalInvested.toFixed(0) + '</div></div>' +
+    '<div><div style="opacity:0.8">计划总额</div><div style="font-size:14px;font-weight:600">¥' + monthPlanTotal.toFixed(0) + '</div></div>' +
+    '<div><div style="opacity:0.8">完成率</div><div style="font-size:14px;font-weight:600">' + completionRate.toFixed(0) + '%</div></div>' +
+    '</div></div>';
+  return html;
+}
+
 function renderDipPlanItem(item) {
   var plan = item.plan;
   var status = item.status;
@@ -1194,7 +1463,7 @@ function renderDipPlanItem(item) {
     statusHtml + '</div>' +
     '<div class="dip-plan-meta"><span>' + DipService.getFrequencyLabel(plan) + '</span><span>目标 ¥' + plan.targetAmount.toFixed(2) + '</span></div>' +
     '<div class="dip-plan-actions">' +
-    (fund && !status.completed ? '<button class="btn btn-sm btn-primary" onclick="window._showPositionModal(\'' + plan.fundId + '\',\'buy\')">去加仓</button>' : '') +
+    (fund && !status.completed ? '<button class="btn btn-sm btn-primary" onclick="window._showPositionModal(\'' + plan.fundId + '\',\'buy\',\'dip\')">去加仓</button>' : '') +
     '<button class="btn btn-sm btn-secondary" onclick="window._editDipPlan(\'' + plan.id + '\')">编辑</button>' +
     '<button class="btn btn-sm btn-danger" onclick="window._deleteDipPlan(\'' + plan.id + '\')">删除</button></div></div>';
 }
@@ -1245,7 +1514,6 @@ window._showDipPlanModal = function(planId) {
 
   document.body.appendChild(overlay);
 
-  // Show/hide weekDay/monthDay based on frequency
   var freqSelect = document.getElementById('dipFrequency');
   function updateFreqFields() {
     var freq = freqSelect.value;
@@ -1255,7 +1523,6 @@ window._showDipPlanModal = function(planId) {
   freqSelect.addEventListener('change', updateFreqFields);
   updateFreqFields();
 
-  // Submit
   document.getElementById('dipSubmitBtn').addEventListener('click', function() {
     var errEl = document.getElementById('dipError');
     errEl.textContent = '';
@@ -1266,27 +1533,11 @@ window._showDipPlanModal = function(planId) {
     var targetAmount = parseFloat(document.getElementById('dipTargetAmount').value);
     var enabled = document.getElementById('dipEnabled').checked;
 
-    var planData = {
-      fundId: fundId,
-      frequency: frequency,
-      weekDay: weekDay,
-      monthDay: monthDay,
-      targetAmount: targetAmount,
-      enabled: enabled
-    };
-
+    var planData = { fundId: fundId, frequency: frequency, weekDay: weekDay, monthDay: monthDay, targetAmount: targetAmount, enabled: enabled };
     var result;
-    if (isEdit) {
-      result = DipService.updatePlan(plan.id, planData);
-    } else {
-      result = DipService.addPlan(planData);
-    }
-
-    if (!result.success) {
-      errEl.textContent = result.errors.join('; ');
-      return;
-    }
-
+    if (isEdit) { result = DipService.updatePlan(plan.id, planData); }
+    else { result = DipService.addPlan(planData); }
+    if (!result.success) { errEl.textContent = result.errors.join('; '); return; }
     overlay.remove();
     showToast(isEdit ? '定投计划已更新' : '定投计划已创建');
     navigate('dip');
@@ -1295,9 +1546,7 @@ window._showDipPlanModal = function(planId) {
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 };
 
-window._editDipPlan = function(planId) {
-  window._showDipPlanModal(planId);
-};
+window._editDipPlan = function(planId) { window._showDipPlanModal(planId); };
 
 window._deleteDipPlan = function(planId) {
   var overlay = document.createElement('div');
@@ -1317,47 +1566,266 @@ window._deleteDipPlan = function(planId) {
 };
 
 // ============================================================
-// Section M: Fund List View
+// Section L4: Analysis View (板块分析)
+// ============================================================
+
+function renderAnalysis(main, header) {
+  header.innerHTML = '<span>板块分析</span><button style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer" onclick="window._showSectorNoteModal()">+ 记录</button>';
+
+  var todayNotes = SectorAnalysisService.getTodayNotes();
+  var buyCount = 0, sellCount = 0, holdCount = 0;
+  for (var i = 0; i < todayNotes.length; i++) {
+    if (todayNotes[i].action === 'buy') buyCount++;
+    else if (todayNotes[i].action === 'sell') sellCount++;
+    else holdCount++;
+  }
+
+  var html = '<div class="card" style="background:linear-gradient(135deg,#4a90d9,#357abd);color:#fff;border:none">' +
+    '<div style="font-size:13px;opacity:0.9;margin-bottom:8px">今日判断</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">' +
+    '<div><span style="opacity:0.8">加仓</span> <span style="font-size:16px;font-weight:600">' + buyCount + '</span></div>' +
+    '<div><span style="opacity:0.8">减仓</span> <span style="font-size:16px;font-weight:600">' + sellCount + '</span></div>' +
+    '<div><span style="opacity:0.8">观望</span> <span style="font-size:16px;font-weight:600">' + holdCount + '</span></div>' +
+    '</div></div>';
+
+  var sectorHeat = SectorAnalysisService.getSectorHeat();
+
+  if (sectorHeat.length === 0) {
+    html += '<div class="empty-state"><div class="empty-icon">🎯</div><p>暂无板块数据，请先为基金设置细分板块</p></div>';
+    main.innerHTML = html;
+    return;
+  }
+
+  var funds = FundService.getAllFunds();
+
+  html += '<div class="card">';
+  for (var s = 0; s < sectorHeat.length; s++) {
+    var sectorName = sectorHeat[s].sector;
+    var todayNote = SectorAnalysisService.getTodayNoteForSector(sectorName);
+
+    // Signal light
+    var signal = '⚪';
+    var judgmentText = '未记录';
+    var judgmentColor = '#888';
+    if (todayNote) {
+      if (todayNote.action === 'buy') { signal = '🔴'; judgmentText = '加仓'; judgmentColor = '#e74c3c'; }
+      else if (todayNote.action === 'hold') { signal = '🟡'; judgmentText = '观望'; judgmentColor = '#f39c12'; }
+      else if (todayNote.action === 'sell') { signal = '🟢'; judgmentText = '减仓'; judgmentColor = '#27ae60'; }
+      if (todayNote.reason) {
+        var reasonPreview = todayNote.reason.length > 30 ? todayNote.reason.substring(0, 30) + '...' : todayNote.reason;
+        judgmentText += ' · ' + reasonPreview;
+      }
+    }
+
+    // Funds in this sector
+    var sectorFunds = funds.filter(function(f) { return f.sector && f.sector.trim() === sectorName; });
+    var sectorFundNames = sectorFunds.map(function(f) { return f.name; }).join('、');
+    var sectorTotalAmount = sectorFunds.reduce(function(sum, f) { return sum + CalcService.calcHoldingAmount(f); }, 0);
+
+    html += '<div class="sector-item">' +
+      '<div class="sector-top">' +
+      '<span class="signal-light">' + signal + '</span>' +
+      '<span class="sector-name">' + sectorName + '</span>' +
+      '<span class="sector-judgment" style="color:' + judgmentColor + '">' + judgmentText + '</span>' +
+      '</div>' +
+      '<div class="sector-funds">📦 ' + sectorFundNames + ' · ' + formatMoney(sectorTotalAmount) + '</div>' +
+      '<div class="sector-actions">' +
+      '<button class="btn btn-sm btn-primary" onclick="window._showSectorNoteModal(\'' + sectorName.replace(/'/g, "\\'") + '\')">记录</button>' +
+      '<button class="btn btn-sm btn-secondary" onclick="window._viewSectorHistory(\'' + sectorName.replace(/'/g, "\\'") + '\')">历史</button>' +
+      '</div></div>';
+  }
+  html += '</div>';
+
+  main.innerHTML = html;
+}
+
+// ============================================================
+// Section L5: Sector Note Modal (板块记录)
+// ============================================================
+
+window._showSectorNoteModal = function(preFillSector) {
+  var activeSectors = SectorAnalysisService.getActiveSectors();
+  var today = getTodayStr();
+
+  var sectorOptions = '<option value="">请选择板块</option>';
+  for (var i = 0; i < activeSectors.length; i++) {
+    var sel = (preFillSector && activeSectors[i] === preFillSector) ? ' selected' : '';
+    sectorOptions += '<option value="' + activeSectors[i] + '"' + sel + '>' + activeSectors[i] + '</option>';
+  }
+  sectorOptions += '<option value="__custom__">自定义板块...</option>';
+
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal" style="max-width:420px"><h2>板块记录</h2>' +
+    '<div class="form-group"><label>板块 *</label><select id="sectorNoteSelect">' + sectorOptions + '</select></div>' +
+    '<div class="form-group" id="sectorCustomGroup" style="display:none"><label>自定义板块名称</label>' +
+    '<input type="text" id="sectorNoteCustom" placeholder="输入板块名称"></div>' +
+    '<div class="form-group"><label>操作判断 *</label>' +
+    '<div style="display:flex;gap:12px;margin-top:6px">' +
+    '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px"><input type="radio" name="sectorAction" value="buy" style="width:auto"> 🔴加仓</label>' +
+    '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px"><input type="radio" name="sectorAction" value="hold" style="width:auto"> 🟡观望</label>' +
+    '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:14px"><input type="radio" name="sectorAction" value="sell" style="width:auto"> 🟢减仓</label>' +
+    '</div></div>' +
+    '<div class="form-group"><label>分析理由</label>' +
+    '<textarea id="sectorNoteReason" rows="3" placeholder="简要记录你的判断依据..."></textarea></div>' +
+    '<div class="form-group"><label>日期</label>' +
+    '<input type="date" id="sectorNoteDate" value="' + today + '"></div>' +
+    '<div id="sectorNoteError" class="error-text" style="margin-bottom:8px"></div>' +
+    '<div class="form-actions"><button class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '<button class="btn btn-primary" id="sectorNoteSubmitBtn">保存</button></div></div>';
+
+  document.body.appendChild(overlay);
+
+  var selectEl = document.getElementById('sectorNoteSelect');
+  var customGroup = document.getElementById('sectorCustomGroup');
+  selectEl.addEventListener('change', function() {
+    customGroup.style.display = selectEl.value === '__custom__' ? 'block' : 'none';
+  });
+
+  document.getElementById('sectorNoteSubmitBtn').addEventListener('click', function() {
+    var errEl = document.getElementById('sectorNoteError');
+    errEl.textContent = '';
+
+    var sector = selectEl.value;
+    if (sector === '__custom__') {
+      sector = document.getElementById('sectorNoteCustom').value.trim();
+    }
+    var actionRadios = document.querySelectorAll('input[name="sectorAction"]');
+    var action = '';
+    for (var i = 0; i < actionRadios.length; i++) {
+      if (actionRadios[i].checked) { action = actionRadios[i].value; break; }
+    }
+    var reason = document.getElementById('sectorNoteReason').value;
+    var date = document.getElementById('sectorNoteDate').value;
+
+    var result = SectorAnalysisService.addNote({ sector: sector, action: action, reason: reason, date: date });
+    if (!result.success) { errEl.textContent = result.error; return; }
+    overlay.remove();
+    showToast('板块记录已保存');
+    render();
+  });
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+};
+
+// ============================================================
+// Section L6: Sector History View (板块历史)
+// ============================================================
+
+window._viewSectorHistory = function(sector) {
+  currentSector = sector;
+  navigate('sectorHistory');
+};
+
+function renderSectorHistory(main, header) {
+  if (!currentSector) { navigate('analysis'); return; }
+
+  header.innerHTML = '<button class="back-btn" onclick="window._nav(\'analysis\')">←</button><span>' + currentSector + '</span>';
+
+  var notes = SectorAnalysisService.getNotesBySector(currentSector);
+
+  if (notes.length === 0) {
+    main.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>暂无该板块的历史记录</p></div>';
+    return;
+  }
+
+  var html = '<div class="card">';
+  for (var i = 0; i < notes.length; i++) {
+    var note = notes[i];
+    var actionLabel = '';
+    var actionColor = '#888';
+    if (note.action === 'buy') { actionLabel = '🔴 加仓'; actionColor = '#e74c3c'; }
+    else if (note.action === 'hold') { actionLabel = '🟡 观望'; actionColor = '#f39c12'; }
+    else if (note.action === 'sell') { actionLabel = '🟢 减仓'; actionColor = '#27ae60'; }
+
+    html += '<div class="history-note-item">' +
+      '<div class="history-note-date">' + note.date + '</div>' +
+      '<div class="history-note-action" style="color:' + actionColor + '">' + actionLabel + '</div>' +
+      (note.reason ? '<div class="history-note-reason">' + note.reason + '</div>' : '') +
+      '<button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="window._deleteSectorNote(\'' + note.id + '\')">删除</button>' +
+      '</div>';
+  }
+  html += '</div>';
+
+  main.innerHTML = html;
+}
+
+window._deleteSectorNote = function(noteId) {
+  var result = SectorAnalysisService.deleteNote(noteId);
+  if (result.success) {
+    showToast('记录已删除');
+    render();
+  } else {
+    showToast(result.error);
+  }
+};
+
+// ============================================================
+// Section M: Fund List View (with search/filter)
 // ============================================================
 
 function renderFundList(main, header) {
   header.innerHTML = '<span>基金列表</span>';
-  var funds = FundService.getAllFunds();
+  var allFunds = FundService.getAllFunds();
   var categories = CategoryService.getCategories();
 
-  if (funds.length === 0) {
+  if (allFunds.length === 0) {
     main.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><p>暂无基金，点击右下角添加</p></div>' +
       '<button class="fab" onclick="window._showAddFundModal()">+</button>';
     return;
   }
 
-  var html = '';
-  for (var i = 0; i < categories.length; i++) {
-    var cat = categories[i];
-    var catFunds = funds.filter(function(f) { return f.category === cat.id; });
-    if (catFunds.length === 0) continue;
-    var catTotal = catFunds.reduce(function(s, f) { return s + CalcService.calcHoldingAmount(f); }, 0);
+  // Filter funds by search term
+  var funds = allFunds;
+  if (fundSearchTerm) {
+    var term = fundSearchTerm.toLowerCase();
+    funds = allFunds.filter(function(f) {
+      return f.name.toLowerCase().indexOf(term) !== -1 || f.code.indexOf(term) !== -1;
+    });
+  }
 
-    html += '<div class="category-section"><div class="category-header"><h3>' + cat.name + '</h3>' +
-      '<span class="cat-info">' + catFunds.length + '只 · ' + formatMoney(catTotal) + '</span></div>';
+  var html = '<input type="text" class="search-input" placeholder="搜索基金名称或代码..." value="' + (fundSearchTerm || '') + '" oninput="window._onFundSearch(this.value)">';
 
-    for (var j = 0; j < catFunds.length; j++) {
-      var fund = catFunds[j];
-      var amount = CalcService.calcHoldingAmount(fund);
-      var rate = CalcService.calcProfitRate(fund);
-      html += '<div class="fund-item" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'info\'})">' +
-        '<div class="fund-top"><span><span class="fund-name">' + fund.name + '</span><span class="fund-code">' + fund.code + '</span></span>' +
-        '<span class="fund-amount">' + formatMoney(amount) + '</span></div>' +
-        '<div class="fund-bottom"><span>净值 ' + fund.currentPrice.toFixed(4) + ' · ' + fund.shares.toFixed(2) + '份</span>' +
-        '<span class="' + profitClass(rate) + '">' + formatRate(rate) + '</span></div>' +
-        (fund.note ? '<div class="fund-note">' + fund.note + '</div>' : '') + '</div>';
+  if (funds.length === 0) {
+    html += '<div class="empty-state" style="padding:20px"><p>未找到匹配的基金</p></div>';
+  } else {
+    for (var i = 0; i < categories.length; i++) {
+      var cat = categories[i];
+      var catFunds = funds.filter(function(f) { return f.category === cat.id; });
+      if (catFunds.length === 0) continue;
+      var catTotal = catFunds.reduce(function(s, f) { return s + CalcService.calcHoldingAmount(f); }, 0);
+
+      html += '<div class="category-section"><div class="category-header"><h3>' + cat.name + '</h3>' +
+        '<span class="cat-info">' + catFunds.length + '只 · ' + formatMoney(catTotal) + '</span></div>';
+
+      for (var j = 0; j < catFunds.length; j++) {
+        var fund = catFunds[j];
+        var amount = CalcService.calcHoldingAmount(fund);
+        var rate = CalcService.calcProfitRate(fund);
+        html += '<div class="fund-item" onclick="window._nav(\'fundDetail\',{fundId:\'' + fund.id + '\',detailTab:\'info\'})">' +
+          '<div class="fund-top"><span><span class="fund-name">' + fund.name + '</span><span class="fund-code">' + fund.code + '</span></span>' +
+          '<span class="fund-amount">' + formatMoney(amount) + '</span></div>' +
+          '<div class="fund-bottom"><span>净值 ' + fund.currentPrice.toFixed(4) + ' · ' + fund.shares.toFixed(2) + '份</span>' +
+          '<span class="' + profitClass(rate) + '">' + formatRate(rate) + '</span></div>' +
+          (fund.note ? '<div class="fund-note">' + fund.note + '</div>' : '') + '</div>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
   }
 
   html += '<button class="fab" onclick="window._showAddFundModal()">+</button>';
   main.innerHTML = html;
 }
+
+window._onFundSearch = function(value) {
+  fundSearchTerm = value;
+  var main = $('#appMain');
+  var header = $('#appHeader');
+  renderFundList(main, header);
+  // Restore cursor position in search input
+  var input = main.querySelector('.search-input');
+  if (input) { input.focus(); input.setSelectionRange(value.length, value.length); }
+};
 
 // ============================================================
 // Section N: Fund Detail View
@@ -1420,15 +1888,40 @@ function renderDetailInfo(fund) {
 function renderPriceRecords(fund) {
   var records = RecordService.getPriceChangeRecords(fund.id);
   if (records.length === 0) return '<div class="empty-state"><p>暂无涨跌记录</p></div>';
-  var html = '<div class="card">';
+
+  // Group records by date
+  var groups = {};
+  var groupOrder = [];
   for (var i = 0; i < records.length; i++) {
     var r = records[i];
-    var isUp = r.newPrice > r.oldPrice;
-    var color = isUp ? '#e74c3c' : r.newPrice < r.oldPrice ? '#27ae60' : '#888';
-    html += '<div class="record-item"><div class="record-top">' +
-      '<span style="color:' + color + ';font-weight:500">' + (isUp ? '↑' : '↓') + ' ' + r.oldPrice.toFixed(4) + ' → ' + r.newPrice.toFixed(4) + '</span>' +
-      '<span style="color:' + color + '">' + formatRate(r.changeRate) + '</span></div>' +
-      '<div class="record-date">' + formatDate(r.date) + '</div></div>';
+    var dateKey = r.date ? r.date.slice(0, 10) : 'unknown';
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+      groupOrder.push(dateKey);
+    }
+    groups[dateKey].push(r);
+  }
+
+  var html = '<div class="card">';
+  for (var g = 0; g < groupOrder.length; g++) {
+    var dateKey = groupOrder[g];
+    var dateLabel = formatDateGroupHeader(dateKey);
+    html += '<div class="date-group-header">' + dateLabel + '</div>';
+    var groupRecords = groups[dateKey];
+    for (var j = 0; j < groupRecords.length; j++) {
+      var rec = groupRecords[j];
+      var isUp = rec.newPrice > rec.oldPrice;
+      var color = isUp ? '#e74c3c' : rec.newPrice < rec.oldPrice ? '#27ae60' : '#888';
+      var timeStr = '';
+      if (rec.date) {
+        var d = new Date(rec.date);
+        timeStr = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+      }
+      html += '<div class="record-item"><div class="record-top">' +
+        '<span style="color:' + color + ';font-weight:500">' + (isUp ? '↑' : '↓') + ' ' + rec.oldPrice.toFixed(4) + ' → ' + rec.newPrice.toFixed(4) + '</span>' +
+        '<span style="color:' + color + '">' + formatRate(rec.changeRate) + '</span></div>' +
+        '<div class="record-date">' + timeStr + '</div></div>';
+    }
   }
   html += '</div>';
   return html;
@@ -1727,10 +2220,11 @@ window._showDeleteConfirm = function(fundId) {
 };
 
 // ============================================================
-// Section R: Position Modal (加减仓 - 按金额)
+// Section R: Position Modal (加减仓 - 按金额) with returnView support
 // ============================================================
 
-window._showPositionModal = function(fundId, type) {
+window._showPositionModal = function(fundId, type, returnView) {
+  positionReturnView = returnView || null;
   var fund = FundService.getFund(fundId);
   if (!fund) return;
   var isBuy = type === 'buy';
@@ -1785,7 +2279,15 @@ window._showPositionModal = function(fundId, type) {
     if (!result.success) { document.getElementById('posError').textContent = result.errors.join('; '); return; }
     overlay.remove();
     showToast(isBuy ? '加仓成功' : '减仓成功');
-    navigate('fundDetail', { fundId: fundId, detailTab: 'positionRecords' });
+
+    // Navigate back to returnView if specified (e.g., 'dip')
+    if (positionReturnView) {
+      var rv = positionReturnView;
+      positionReturnView = null;
+      navigate(rv);
+    } else {
+      navigate('fundDetail', { fundId: fundId, detailTab: 'positionRecords' });
+    }
   });
 
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
